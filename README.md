@@ -6,6 +6,32 @@ This repository implements the core control plane runtime architecture used to o
 
 The system is designed to separate reasoning, safety, execution, and capabilities into independent layers.
 
+# What This Repository Demonstrates
+
+This project demonstrates how to build a **modular AI agent runtime** using a control plane architecture.
+
+The system separates reasoning, execution, governance, and knowledge retrieval into independent layers, allowing AI agents to safely interact with external tools and data systems.
+
+Key concepts demonstrated in this repository:
+
+• **Agent Orchestration**  
+A runtime orchestrator manages a ReAct-style reasoning loop where the model can decide when to call tools and when to return a final answer.
+
+• **Safe Tool Execution**  
+All tool calls pass through a kernel execution boundary that validates inputs, enforces timeouts, and normalizes errors.
+
+• **Policy Enforcement**  
+A policy layer governs which tools the agent is allowed to execute, preventing unauthorized capabilities.
+
+• **Modular Tool Architecture**  
+Tools are registered dynamically through a tool registry and grouped into tool packs, enabling capability expansion without modifying the runtime core.
+
+• **External Knowledge Systems (RAG)**  
+The runtime retrieves context from external retrieval systems (such as a pgvector-backed RAG service) instead of storing knowledge internally.
+
+• **Layered Runtime Design**  
+Each system component has a single responsibility:
+
 ## Architecture Overview
 
 The runtime follows a layered execution model.
@@ -122,15 +148,15 @@ src
 
 Each directory maps directly to a runtime responsibility.
 
-| Layer | Responsibility |
-|-------|-----------------|
-| Transport | Receives and routes incoming requests |
-| Orchestrator | Runs the agent reasoning loop |
-| Policy | Enforces capability governance |
-| Kernel | Safe tool execution boundary |
-| Tool Registry | Maps tool names to implementations |
-| Tool Packs | Modular capability implementations |
-| External Systems | Knowledge systems and APIs |
+| Layer            | Responsibility                        |
+| ---------------- | ------------------------------------- |
+| Transport        | Receives and routes incoming requests |
+| Orchestrator     | Runs the agent reasoning loop         |
+| Policy           | Enforces capability governance        |
+| Kernel           | Safe tool execution boundary          |
+| Tool Registry    | Maps tool names to implementations    |
+| Tool Packs       | Modular capability implementations    |
+| External Systems | Knowledge systems and APIs            |
 
 ## Key Architectural Concepts
 
@@ -180,12 +206,7 @@ The policy layer enforces runtime governance.
 Examples:
 
 ```javascript
-ALLOWED_TOOLS = [
-  "echo",
-  "add",
-  "sleep",
-  "searchDocuments"
-]
+ALLOWED_TOOLS = ["echo", "add", "sleep", "searchDocuments"];
 ```
 
 Policy ensures:
@@ -236,12 +257,12 @@ Runtime tools query these systems to retrieve context.
 
 This project is part of a larger modular system.
 
-| Repository | Role |
-|------------|------|
-| runtime-ui | Chat interface for interacting with the runtime |
-| ai-runtime-server | RAG runtime server and retrieval pipeline |
-| rag-mdn | documentation ingestion and embedding generation |
-| control-plane | runtime architecture and agent execution |
+| Repository        | Role                                             |
+| ----------------- | ------------------------------------------------ |
+| runtime-ui        | Chat interface for interacting with the runtime  |
+| ai-runtime-server | RAG runtime server and retrieval pipeline        |
+| rag-mdn           | documentation ingestion and embedding generation |
+| control-plane     | runtime architecture and agent execution         |
 
 System architecture:
 
@@ -263,25 +284,25 @@ RAG Systems
 
 The runtime was designed to solve common issues in AI systems.
 
-| Problem | Solution |
-|---------|----------|
-| unsafe tool execution | kernel execution boundary |
-| uncontrolled capabilities | policy enforcement |
-| monolithic AI applications | modular runtime layers |
-| tightly coupled knowledge systems | external RAG repositories |
-| difficult agent extension | tool registry architecture |
+| Problem                           | Solution                   |
+| --------------------------------- | -------------------------- |
+| unsafe tool execution             | kernel execution boundary  |
+| uncontrolled capabilities         | policy enforcement         |
+| monolithic AI applications        | modular runtime layers     |
+| tightly coupled knowledge systems | external RAG repositories  |
+| difficult agent extension         | tool registry architecture |
 
 ## Documentation
 
 Detailed documentation is available in the `/docs` directory.
 
-| Document | Description |
-|----------|-------------|
-| architecture-diagram.md | visual system architecture |
-| agent-runtime-flow.md | end-to-end execution flow |
-| ai-control-plane.md | runtime architecture overview |
-| design-decisions.md | architectural reasoning |
-| repository-map.md | codebase structure |
+| Document                | Description                   |
+| ----------------------- | ----------------------------- |
+| architecture-diagram.md | visual system architecture    |
+| agent-runtime-flow.md   | end-to-end execution flow     |
+| ai-control-plane.md     | runtime architecture overview |
+| design-decisions.md     | architectural reasoning       |
+| repository-map.md       | codebase structure            |
 
 ## Future Extensions
 
