@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  performSemanticSearch,
-  SearchResult,
-} from "../../../../RAG MDN/rag-mdn/src/lib/search";
+import { performSemanticSearch, SearchResult } from "../../lib/search";
 
 const SearchSchema = z.object({
   query: z.string().min(3),
