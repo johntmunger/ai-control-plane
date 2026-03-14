@@ -34,35 +34,39 @@ Each system component has a single responsibility:
 
 ## Architecture Overview
 
-The runtime follows a layered execution model.
-
-```
-User Prompt
-     │
-     ▼
-Transport Layer
-     │
-     ▼
-Orchestrator (Agent Loop)
-     │
-     ▼
-Policy Layer
-     │
-     ▼
-Kernel (Execution Engine)
-     │
-     ▼
-Tool Registry
-     │
-     ▼
-Tool Packs
-     │
-     ▼
-External Systems
-(RAG, APIs, services)
-```
-
-Each layer has a single responsibility, allowing the runtime to scale safely and evolve independently.
+                     USER
+                      │
+                      ▼
+                ┌─────────────┐
+                │  runtime-ui │
+                │ React Chat  │
+                └─────────────┘
+                      │
+                      ▼
+           ┌──────────────────────┐
+           │   ai-runtime-server   │
+           │   RAG Runtime API     │
+           └──────────────────────┘
+                      │
+                      ▼
+             ┌─────────────────┐
+             │  control-plane  │
+             │ Agent Runtime   │
+             └─────────────────┘
+                      │
+                      ▼
+               ┌──────────────┐
+               │   rag-mdn     │
+               │ Knowledge     │
+               │ Ingestion     │
+               └──────────────┘
+                      │
+                      ▼
+             ┌─────────────────┐
+             │ Postgres +      │
+             │ pgvector        │
+             │ Vector Database │
+             └─────────────────┘
 
 ## Runtime Execution Flow
 
