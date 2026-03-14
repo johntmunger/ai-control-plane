@@ -257,16 +257,16 @@ semantic retrieval
 
 Runtime tools query these systems to retrieve context.
 
-## Related Repositories
+## System Repositories
 
-This project is part of a larger modular system.
+This project is part of a modular AI system composed of several repositories.
 
-| Repository        | Role                                             |
-| ----------------- | ------------------------------------------------ |
-| runtime-ui        | Chat interface for interacting with the runtime  |
-| ai-runtime-server | RAG runtime server and retrieval pipeline        |
-| rag-mdn           | documentation ingestion and embedding generation |
-| control-plane     | runtime architecture and agent execution         |
+| Repository                                                            | Description                                                      |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [control-plane](https://github.com/johntmunger/ai-control-plane)      | Agent runtime architecture (orchestrator, policy, kernel, tools) |
+| [ai-runtime-server](https://github.com/johntmunger/ai-runtime-server) | Retrieval-Augmented Generation (RAG) runtime and chat API        |
+| [rag-mdn](https://github.com/johntmunger/retrieval-grounded-llm)      | Documentation ingestion and embedding pipeline                   |
+| [runtime-ui](https://github.com/johntmunger/ai-runtime-ui)            | Chat interface for interacting with the runtime                  |
 
 System architecture:
 
