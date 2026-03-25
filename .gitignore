@@ -1,1 +1,47 @@
 .env
+.env.*
+!.env.example
+!.env.example.*
+
+# Node / package manager
+node_modules/
+.pnp/
+.pnp.js
+
+# Build outputs
+dist/
+build/
+out/
+coverage/
+.nyc_output/
+
+# Framework-specific
+.next/
+.nuxt/
+svelte-kit/
+.svelte-kit/
+.astro/
+.vercel/
+
+# Caches
+.cache/
+.turbo/
+
+# Logs
+*.log
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+.iml
+*.swp
+*~
+
+# Common secret/cert files (add/remove as needed)
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
