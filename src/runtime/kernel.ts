@@ -1,4 +1,4 @@
-import { tools, ToolName } from "../tools";
+import { getTool } from "../tools/registry";
 import { KernelRequestSchema } from "../schemas/request";
 import { normalizeError, UnknownToolError } from "../utils/errors";
 import { withTimeout } from "../utils/timeout";
@@ -14,26 +14,29 @@ export async function handleKernelRequest(request: unknown) {
 
     const { tool, arguments: args } = parsedRequest;
 
-    if (!(tool in tools)) {
+    const toolDef = getTool(tool);
+
+    if (!toolDef) {
       throw new UnknownToolError(tool);
     }
 
-    const toolName = tool as ToolName;
-
-    const toolDef = tools[toolName];
-
     const parsedArgs = toolDef.schema.parse(args);
 
-    logInvocation(id ?? "unknown", toolName, parsedArgs);
+    logInvocation(id ?? "unknown", toolDef.name, parsedArgs);
 
-    // @ts-ignore
+    const startTime = Date.now();
     const result = await withTimeout(toolDef.execute(parsedArgs), 2000);
+    const duration = Date.now() - startTime;
 
-    return { id, result };
-  } catch (err) {
-    return {
+    console.error("KERNEL RESULT:", {
       id,
-      error: normalizeError(err),
-    };
+      result,
+      tool: toolDef.name,
+      duration,
+    });
+
+    return { id, result, tool: toolDef.name, duration };
+  } catch (err) {
+    return { id, error: normalizeError(err) };
   }
 }

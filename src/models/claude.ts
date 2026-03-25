@@ -1,42 +1,79 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { ModelAdapter } from "./interface";
+import type { ToolMetadata } from "../tools/registry";
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+// 🔹 Convert Zod schema → simple argument description
+function formatSchema(schema: any): string {
+  try {
+    const shape = schema.shape;
+
+    if (!shape) return "{ ... }";
+
+    const fields = Object.keys(shape).map((key) => {
+      return `"${key}": string`;
+    });
+
+    return `{ ${fields.join(", ")} }`;
+  } catch {
+    return "{ ... }";
+  }
+}
+
+// 🔹 Build dynamic system prompt from tools
+function buildSystemPrompt(tools: ToolMetadata[]) {
+  const toolList = tools
+    .map((t) => {
+      const args = formatSchema(t.schema);
+
+      return `- ${t.name}: ${t.description}
+
+arguments: ${args}`;
+    })
+    .join("\n\n");
+
+  return `
+You are an AI agent running inside a tool-enabled runtime.
+
+Available tools:
+
+${toolList}
+
+Rules:
+
+If the user request requires external information or actions, use a tool.
+
+Always use the exact tool name as listed above.
+
+Match the argument structure exactly as shown.
+
+Return tool calls as JSON:
+{
+"tool": "",
+"arguments": { ... }
+}
+
+After receiving tool results, use them to produce a final answer.
+
+Do not hallucinate tools or arguments.
+
+If no tool is needed, respond with a final answer.
+`;
+}
+
 export const claudeAdapter: ModelAdapter = {
-  async plan(prompt: string, history: MessageParam[]) {
+  async plan(prompt: string, history: MessageParam[], tools: ToolMetadata[]) {
+    const systemPrompt = buildSystemPrompt(tools);
+
     const response = await client.messages.create({
       model: process.env.CLAUDE_MODEL ?? "claude-3-haiku-20240307",
       max_tokens: 1024,
       temperature: 0.2,
-
-      system: `
-      You are an AI agent running inside a tool-enabled runtime.
-
-You have access to the following tool:
-
-searchDocuments(query: string)
-
-Rules:
-
-1. If the user asks a knowledge question, call searchDocuments.
-2. Only call the tool once.
-3. After tool results are returned, generate the final answer using the retrieved context.
-4. Do NOT call the tool again after results are available.
-
-Tool calls must be returned as JSON:
-
-{
-  "tool": "searchDocuments",
-  "arguments": { "query": "..." }
-}
-
-Final answers must be normal text explanations.
-      `,
-
+      system: systemPrompt,
       messages: [
         ...history,
         {
@@ -51,13 +88,13 @@ Final answers must be normal text explanations.
     if (content.type === "text") {
       const text = content.text.trim();
 
-      // Try direct JSON parse first
+      // 🔹 Try direct JSON parse
       try {
         const parsed = JSON.parse(text);
         if (parsed.tool) return parsed;
       } catch {}
 
-      // Try extracting a JSON block from the response
+      // 🔹 Try extracting JSON block
       const start = text.indexOf("{");
       const end = text.lastIndexOf("}");
 
@@ -70,6 +107,7 @@ Final answers must be normal text explanations.
         } catch {}
       }
 
+      // 🔹 Otherwise treat as final answer
       return text;
     }
 

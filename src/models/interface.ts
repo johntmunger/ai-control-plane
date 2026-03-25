@@ -6,5 +6,9 @@ export type ToolCall = {
 };
 
 export interface ModelAdapter {
-  plan(prompt: string, history: MessageParam[]): Promise<string | ToolCall>;
+  plan(
+    prompt: string,
+    history: MessageParam[],
+    tools: { name: string; description: string }[],
+  ): Promise<string | ToolCall>;
 }

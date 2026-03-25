@@ -10,29 +10,30 @@ function formatContext(results: SearchResult[]) {
   return results
     .map(
       (r, i) => `
-  CONTEXT ${i + 1}
-  ---------
-  ${r.text}
-  
-  SOURCE: ${r.title || r.source}
-  SIMILARITY: ${(r.similarity * 100).toFixed(2)}%
-  `,
+CONTEXT ${i + 1}
+---------
+${r.text}
+
+SOURCE: ${r.title || r.source}
+SIMILARITY: ${(r.similarity * 100).toFixed(2)}%
+`,
     )
     .join("\n");
 }
 
-export async function searchDocuments(input: z.infer<typeof SearchSchema>) {
-  const results = await performSemanticSearch(input.query, input.limit ?? 5);
-
-  const context = formatContext(results);
-
-  return {
-    context,
-    sources: results,
-  };
-}
-
 export const searchDocumentsTool = {
+  name: "searchDocuments",
+  description:
+    "Search documentation using semantic similarity and return relevant context for answering a question",
   schema: SearchSchema,
-  execute: searchDocuments,
+  execute: async (input: z.infer<typeof SearchSchema>) => {
+    const results = await performSemanticSearch(input.query, input.limit ?? 5);
+
+    const context = formatContext(results);
+
+    return {
+      context,
+      sources: results,
+    };
+  },
 };
