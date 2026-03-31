@@ -1,6 +1,6 @@
 import { handleKernelRequest } from "./kernel";
 import { KernelRequestSchema } from "../schemas/request";
-import { normalizeError } from "../utils/errors";
+import { normalizeError } from "../tools/errors/normalize";
 
 const ALLOWED_TOOLS = new Set(["echo", "add", "sleep", "searchDocuments"]);
 

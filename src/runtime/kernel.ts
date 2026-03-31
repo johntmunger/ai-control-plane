@@ -1,6 +1,7 @@
 import { getTool } from "../tools/registry";
 import { KernelRequestSchema } from "../schemas/request";
-import { normalizeError, UnknownToolError } from "../utils/errors";
+import { UnknownToolError } from "../tools/errors/types";
+import { normalizeError } from "../tools/errors/normalize";
 import { withTimeout } from "../utils/timeout";
 import { logInvocation } from "../utils/logging";
 

@@ -1,4 +1,4 @@
-import { ToolTimeoutError } from "./errors";
+import { ToolTimeoutError } from "../tools/errors/types";
 
 export async function withTimeout<T>(
   promise: Promise<T>,
