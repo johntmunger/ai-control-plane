@@ -4,8 +4,6 @@
 
 All notable changes to the AI Control Plane Runtime will be documented in this file.
 
-## CHANGELOG
-
 ### 🚀 v0.2.0 — Failure Semantics & Adaptive Control
 
 #### ✨ Added
@@ -14,46 +12,61 @@ All notable changes to the AI Control Plane Runtime will be documented in this f
   - deterministic (input-driven, non-recoverable)
   - transient (execution/environment-driven, potentially recoverable)
 - Error subtype system (validation, timeout, unknown_tool, execution) to preserve detailed failure context
-- Optional per-tool input normalization hook for safe argument coercion (e.g., "5" → 5)
-- Model escalation mechanism with tiered routing (e.g., fast → strong) triggered by parsing/validation failures
-- Observability improvements in orchestrator loop, including step-aware error reporting
+- Outcome-based input normalization (per-tool) that only applies when coercion results in schema-valid arguments
+- Signal-based model escalation triggered specifically by validation failures where normalization does not resolve the input
+- Bounded retry mechanism (single retry) to guarantee deterministic termination and prevent infinite loops
+- Observability improvements in orchestrator loop, including:
+  - normalization outcome logging
+  - retry attempt visibility
+  - escalation decision tracing
 
 #### 🔄 Changed
 
-- Replaced string-based error types (validation_error, timeout, etc.) with structured error semantics (type + subtype)
-- Updated kernel to act as the source of truth for error classification via `normalizeError`
+- Replaced naive retry logic (“retry on failure”) with explicit escalation conditions:
+  - only retry on deterministic validation errors
+  - only when normalization did not successfully resolve input
+- Updated normalization semantics from:
+  - “did normalization run?” → ❌
+  - to “did normalization produce a valid result?” → ✅
+- Strengthened planner constraints to prevent argument value invention (e.g., disallow `"banana" → 3`)
 - Modified orchestrator loop to:
-  - fail fast on deterministic errors
-  - allow controlled retry for transient errors
-  - escalate model tier on interpretation failures (single retry)
-- Introduced optional normalization stage prior to schema validation without weakening kernel enforcement
+  - terminate immediately on successful execution
+  - perform at most one controlled retry
+  - fail cleanly when input cannot be safely resolved
+- Ensured kernel metadata (`normalization_applied`) is propagated as a control signal, not just logging
 
 #### 🧠 Key Improvements
 
-- Established error semantics as control signals, enabling deterministic system behavior
-- Eliminated non-productive retry loops caused by repeated invalid model outputs
-- Enabled adaptive execution strategy:
-  - terminate (invalid input)
-  - retry (transient failure)
-  - escalate (interpretation failure)
-- Improved system reliability by decoupling:
-  - error detection (kernel)
-  - error interpretation (normalization layer)
-  - response strategy (orchestrator)
-- Introduced cost-aware execution patterns through selective model escalation
+- Eliminated silent correctness failures caused by model-generated argument substitution
+- Established normalization as a safe, structural correction layer, not a semantic interpreter
+- Introduced bounded, signal-driven recovery instead of open-ended retries
+- Prevented non-converging retry loops through deterministic termination guarantees
 
-Reinforced principle:
+**Enforced system-level principle:**
 
-> “The model is a non-deterministic planner; correctness is enforced by the system”
+> correctness > completion
+
+**Clarified separation of responsibilities:**
+
+- model → proposes
+- kernel → validates
+- orchestrator → decides
 
 #### 🧪 Validated Through
 
-- Failure scenario testing:
-  - invalid argument handling ("5" vs 5)
-  - repeated model misinterpretation loops
-  - timeout and execution edge cases
-- Verified deterministic termination for schema validation errors
-- Demonstrated model escalation improving recovery from parsing failures
+- End-to-end runtime testing (not isolated unit tests), ensuring correct interaction between model, kernel, and orchestrator
+- Failure scenario validation:
+  - `"5"` vs `5` → normalization success path
+  - `"five"` → escalation recovery path
+  - `"banana"` → safe failure (no guessing)
+- Detection and resolution of:
+  - model masking of system behavior (pre-normalization)
+  - incorrect normalization signaling (reference vs semantic change)
+  - variable shadowing affecting control flow
+- Verified:
+  - escalation triggers only when appropriate
+  - retry occurs exactly once
+  - all execution paths terminate deterministically
 
 #### 🔥 Why This Is Strong
 

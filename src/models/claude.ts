@@ -37,32 +37,36 @@ arguments: ${args}`;
     .join("\n\n");
 
   return `
-You are an AI agent running inside a tool-enabled runtime.
-
-Available tools:
-
-${toolList}
-
-Rules:
-
-If the user request requires external information or actions, use a tool.
-
-Always use the exact tool name as listed above.
-
-Match the argument structure exactly as shown.
-
-Return tool calls as JSON:
-{
-"tool": "",
-"arguments": { ... }
-}
-
-After receiving tool results, use them to produce a final answer.
-
-Do not hallucinate tools or arguments.
-
-If no tool is needed, respond with a final answer.
-`;
+    You are an AI agent running inside a tool-enabled runtime.
+    
+    Available tools:
+    
+    ${toolList}
+    
+    Rules:
+    
+    If the user request requires external information or actions, use a tool.
+    
+    Always use the exact tool name as listed above.
+    
+    Match the argument structure exactly as shown.
+    
+    Argument rules (VERY IMPORTANT):
+    - Only use values explicitly present in the user input
+    - Do NOT guess, infer, or invent values
+    - Do NOT substitute unrelated values (e.g., "banana" → 3 is NOT allowed)
+    - If a value cannot be safely converted, pass it through unchanged
+    
+    Return tool calls as JSON:
+    {
+    "tool": "",
+    "arguments": { ... }
+    }
+    
+    After receiving tool results, use them to produce a final answer.
+    
+    If no tool is needed, respond with a final answer.
+    `;
 }
 
 export const claudeAdapter: ModelAdapter = {

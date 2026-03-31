@@ -1,16 +1,17 @@
 import { z } from "zod";
 
-export type Tool = {
+export interface Tool<TInput = unknown, TOutput = unknown> {
   name: string;
   description: string;
-  schema: z.ZodSchema<any>;
-  execute: (args: any) => Promise<any>;
+  schema: z.ZodSchema<TInput>;
+  execute(args: TInput): Promise<TOutput>;
+  normalize?: (args: unknown) => unknown;
   pack?: string;
-};
+}
 
 export type ToolPack = {
   name: string;
-  tools: Tool[];
+  tools: Tool<any, any>[];
 };
 
 export type ToolMetadata = {
@@ -27,7 +28,7 @@ export function listToolMetadata(): ToolMetadata[] {
   }));
 }
 
-const registry = new Map<string, Tool>();
+const registry = new Map<string, Tool<any, any>>();
 
 export function registerToolPack(pack: ToolPack) {
   for (const tool of pack.tools) {
@@ -45,10 +46,10 @@ export function registerToolPack(pack: ToolPack) {
   }
 }
 
-export function getTool(name: string): Tool | undefined {
+export function getTool(name: string): Tool<any, any> | undefined {
   return registry.get(name);
 }
 
-export function listTools(): Tool[] {
+export function listTools(): Tool<any, any>[] {
   return Array.from(registry.values());
 }
