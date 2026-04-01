@@ -4,6 +4,41 @@
 
 All notable changes to the AI Control Plane Runtime will be documented in this file.
 
+### 🚀 v0.3.0 — Kernel Authority & Unified Execution Boundary
+
+#### feat(control-plane): enforce kernel as single execution + output authority
+
+This change introduces a strict kernel boundary, eliminating all non-kernel output paths and unifying execution semantics across the runtime.
+
+#### ✨ Key Changes
+
+- Introduced `KernelInput` as the sole execution contract for orchestrator → kernel communication
+- Refactored orchestrator to return structured intents only (no direct output)
+- Removed all string and `type: "final"` return paths (previous bypass vector)
+- Added `executeKernel` as the single entry point for:
+  - tool execution (delegated)
+  - chat emission (structured)
+  - refusal emission (structured)
+- Updated runtime flow to: `orchestrate → executeKernel → response`
+
+#### 🔒 Guarantees Established
+
+- No output without validation
+- Kernel is the only component capable of emitting user-visible responses
+- All execution paths are observable and structured
+- LLM and orchestrator no longer hold output authority
+
+#### 🧠 Architectural Impact
+
+- Collapses dual-authority system into a single controlled boundary
+- Converts observability from best-effort to invariant
+- Eliminates invisible failure paths caused by direct LLM output
+- Enables deterministic debugging and traceability across all flows
+
+---
+
+This change transitions the system from a model-driven application to a governed control-plane runtime with enforceable execution semantics.
+
 ### 🚀 v0.2.0 — Failure Semantics & Adaptive Control
 
 #### ✨ Added

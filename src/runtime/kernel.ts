@@ -4,6 +4,7 @@ import { UnknownToolError } from "../tools/errors/types";
 import { normalizeError } from "../tools/errors/normalize";
 import { withTimeout } from "../utils/timeout";
 import { logInvocation } from "../utils/logging";
+import type { KernelInput } from "../types/control-plane.";
 
 export async function handleKernelRequest(request: unknown) {
   let id: string | null = null;
@@ -86,5 +87,38 @@ export async function handleKernelRequest(request: unknown) {
         normalization_applied: normalizationApplied,
       },
     };
+  }
+}
+
+/** Uniform entry for orchestrator-shaped `KernelInput` (tool / chat / refusal). */
+export async function executeKernel(input: KernelInput) {
+  console.log("KERNEL INPUT:", input.type);
+
+  switch (input.type) {
+    case "tool":
+      return handleKernelRequest({
+        id: crypto.randomUUID(),
+        tool: input.tool,
+        arguments: input.arguments,
+      });
+
+    case "chat":
+      return {
+        type: "chat" as const,
+        content: input.message,
+        timestamp: Date.now(),
+      };
+
+    case "refusal":
+      return {
+        type: "refusal" as const,
+        reason: input.reason ?? "unspecified",
+        timestamp: Date.now(),
+      };
+
+    default: {
+      const _exhaustive: never = input;
+      return _exhaustive;
+    }
   }
 }

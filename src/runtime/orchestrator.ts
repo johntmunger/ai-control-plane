@@ -2,6 +2,25 @@ import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { modelRouter } from "../models/router";
 import { handlePolicyRequest } from "./policy";
 import { listToolMetadata } from "../tools/registry";
+import { classifyIntent } from "./intent";
+import type { KernelInput } from "../types/control-plane.";
+
+function formatRefusalReason(message: unknown): string {
+  if (typeof message === "string") return message;
+  if (message === undefined) return "tool_error";
+  return JSON.stringify(message);
+}
+
+function requiresTool(prompt: string): boolean {
+  const p = prompt.toLowerCase();
+
+  return (
+    p.includes("add") ||
+    p.includes("calculate") ||
+    p.includes("compute") ||
+    p.includes("sleep")
+  );
+}
 
 // 🔥 EXECUTION WITH ESCALATION
 async function executeWithEscalation(
@@ -32,6 +51,13 @@ async function executeWithEscalation(
         console.log("✅ RECOVERY SUCCESS");
       }
       return result;
+    }
+
+    if (isError) {
+      console.error(
+        `🚨 ERROR (attempt ${attempt + 1}, tool ${currentRequest.tool}):`,
+        error,
+      );
     }
 
     console.log("⚠️ TOOL ERROR:", error);
@@ -125,45 +151,62 @@ Return ONLY valid JSON arguments.
 }
 
 // 🔥 MAIN ORCHESTRATOR
-export async function orchestrate(prompt: string) {
+export async function orchestrate(prompt: string): Promise<KernelInput> {
   const history: MessageParam[] = [];
-
   const tools = listToolMetadata();
 
   const decision = await modelRouter.plan(prompt, history, tools);
 
+  // ✅ Normalize immediately
+  let kernelInput: KernelInput;
+
   if (typeof decision === "string") {
-    return {
-      type: "final",
+    const { requiresTool } = await classifyIntent(prompt);
+
+    if (requiresTool) {
+      return {
+        type: "refusal",
+        reason: "tool_required_but_not_used",
+      };
+    }
+
+    kernelInput = {
+      type: "chat",
       message: decision,
-      history,
     };
+  } else {
+    if (!decision.tool) {
+      return {
+        type: "refusal",
+        reason: "invalid_planner_output",
+      };
+    }
+
+    const toolRequest = {
+      id: crypto.randomUUID(),
+      tool: decision.tool,
+      arguments: decision.arguments,
+    };
+
+    const result = await executeWithEscalation(toolRequest, history);
+
+    if (!("error" in result)) {
+      history.push({
+        role: "assistant",
+        content: `Tool result (${decision.tool}):\n\n${JSON.stringify(result.result, null, 2)}`,
+      });
+
+      kernelInput = {
+        type: "chat",
+        message: JSON.stringify(result.result, null, 2),
+      };
+    } else {
+      kernelInput = {
+        type: "refusal",
+        reason: formatRefusalReason(result.error?.message),
+      };
+    }
   }
 
-  const toolRequest = {
-    id: crypto.randomUUID(),
-    tool: decision.tool,
-    arguments: decision.arguments,
-  };
-
-  const result = await executeWithEscalation(toolRequest, history);
-
-  if (!("error" in result)) {
-    history.push({
-      role: "assistant",
-      content: `Tool result (${decision.tool}):\n\n${JSON.stringify(result.result, null, 2)}`,
-    });
-
-    return {
-      type: "final",
-      message: JSON.stringify(result.result, null, 2),
-      history,
-    };
-  }
-
-  return {
-    type: "final",
-    message: `Tool failed: ${JSON.stringify(result.error.message)}`,
-    history,
-  };
+  return kernelInput;
 }
