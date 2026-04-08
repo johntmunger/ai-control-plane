@@ -1,0 +1,17 @@
+%% Source for mermaid-diagram-execute.png — regenerate:
+%% npx -y @mermaid-js/mermaid-cli@latest -i docs/diagrams/runtime-execute.mmd -o mermaid-diagram-execute.png -w 720
+flowchart TD
+    A[User] --> B[Transport]
+    B --> O[Orchestrator]
+    O --> P[Planner — proposal only]
+    P --> IC[Intent — when planner returns text]
+    IC --> EN[Enforcement]
+    EN --> KI[KernelInput]
+    KI --> D[Policy]
+    D --> E[Kernel — execution + output authority]
+    E --> F[Tool registry]
+    F --> G[Tool packs]
+    G --> H[External systems]
+    H --> OBS[Observations]
+    OBS --> O
+    E --> R[User-visible response]

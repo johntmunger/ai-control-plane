@@ -30,18 +30,26 @@ This separation allows the system to be:
 
 ## 🏗️ High-Level Architecture
 
+The diagram fixes an earlier modeling bug: **user-visible output is emitted only after the kernel** (`KernelInput → executeKernel → response`), not from the orchestrator or planner directly.
+
+Source file (regenerate the PNG after edits): `docs/diagrams/runtime-execute.mmd`.
+
 ```mermaid
 flowchart TD
-    A[User] --> B[Transport Layer]
-    B --> C[Orchestrator]
-    C --> D[Policy Layer]
-    D --> E[Kernel]
-    E --> F[Tool Registry]
-    F --> G[Tool Packs]
-    G --> H[External Systems]
-    H --> I[Context]
-    I --> C
-    C --> J[Final Response]
+    A[User] --> B[Transport]
+    B --> O[Orchestrator]
+    O --> P[Planner — proposal only]
+    P --> IC[Intent — when planner returns text]
+    IC --> EN[Enforcement]
+    EN --> KI[KernelInput]
+    KI --> D[Policy]
+    D --> E[Kernel — execution + output authority]
+    E --> F[Tool registry]
+    F --> G[Tool packs]
+    G --> H[External systems]
+    H --> OBS[Observations]
+    OBS --> O
+    E --> R[User-visible response]
 ```
 
 <p align="center">
@@ -50,20 +58,33 @@ flowchart TD
 
 ## 🔁 Execution Flow
 
-## 🔄 Agent Execution Model
-
-The orchestrator implements a ReAct-style agent loop.
+Runtime integration follows a single contract:
 
 ```text
-while (true):
-  decision = planner(prompt, history)
+orchestrate(prompt) → KernelInput → executeKernel(KernelInput) → user-visible response
+```
 
-  if decision is final:
-    return response
+The orchestrator **never** returns raw model strings as the final transport payload; callers pass its `KernelInput` through `executeKernel`, which is the only place structured chat, refusal, and tool execution results are produced for output.
 
-  if decision is tool:
-    result = execute(tool)
-    history.append(result)
+## 🔄 Agent Execution Model
+
+The orchestrator implements a ReAct-style loop, but the planner **proposes only**. When the planner returns plain text, an **intent** step classifies whether the user’s request required tool execution; the orchestrator **enforces** that classification so the model cannot finalize tool work without going through policy and the kernel.
+
+```text
+decision = planner(prompt, history)
+
+if decision is plain text:
+  intent = classifyIntent(prompt)   // control signal: was a tool required?
+  if intent.requiresTool:
+    KernelInput = refusal             // no planner bypass
+  else:
+    KernelInput = { type: "chat", message: decision }
+
+if decision is tool call:
+  result = policy → kernel → tool (with normalization + bounded retry on validation)
+  KernelInput = chat or refusal wrapping the outcome
+
+return KernelInput   // always structured; output via executeKernel
 ```
 
 ## Capabilities
@@ -71,17 +92,18 @@ while (true):
 - multi-step reasoning
 - dynamic tool invocation
 - iterative context building
+- intent-aware enforcement and structured failure handling (see changelog)
 
 ## 🧩 Layered Architecture
 
 ```text
 Transport
    ↓
-Orchestrator
+Orchestrator (planner + intent + enforcement → KernelInput)
    ↓
 Policy
    ↓
-Kernel
+Kernel (executeKernel — execution + output authority)
    ↓
 Tools
    ↓
@@ -102,8 +124,9 @@ Responsibilities:
 
 - receive requests (`STDIO`)
 - parse JSON messages
-- route requests to orchestrator or kernel
-- return structured responses
+- route prompt requests through `orchestrate` → `executeKernel`
+- route direct tool requests through policy → kernel
+- return structured responses (never raw undecorated model strings)
 
 Future support:
 
@@ -118,9 +141,12 @@ Responsibilities:
 
 - run the agent loop
 - maintain execution history
-- interact with the planner (LLM)
-- decide when to call tools
-- return final responses
+- interact with the planner (LLM) — **proposal only**
+- classify **intent** when the planner returns free text (was a tool required?)
+- **enforce** execution constraints: if a tool was required but the planner returned only text, emit structured refusal instead of accepting the string as output
+- produce a **`KernelInput`** for every turn (never hold final output authority)
+
+The orchestrator does **not** emit user-visible responses by itself; it prepares input for `executeKernel`.
 
 ### Policy Layer
 
@@ -142,9 +168,13 @@ Policy sits between reasoning and execution.
 
 ### Kernel
 
-The execution boundary.
+The execution boundary and **single output authority** for the unified contract.
 
-All tool execution must pass through the kernel.
+All tool execution must pass through the kernel. **`executeKernel`** is the uniform entry for:
+
+- `type: "tool"` — delegate to `handleKernelRequest` (validation, normalization, execution)
+- `type: "chat"` — structured chat payload
+- `type: "refusal"` — structured refusal payload
 
 Responsibilities:
 
@@ -155,8 +185,9 @@ Responsibilities:
 - execute tools safely
 - normalize errors
 - log invocations
+- emit structured shapes consumed by the transport layer
 
-The kernel acts as a firewall for execution.
+The kernel acts as a firewall for execution and the locus of **validated, user-visible output** for this contract.
 
 ### Tool Registry
 
@@ -227,30 +258,45 @@ The runtime enforces safety through layered controls.
 ```text
 Prompt
   ↓
-Tool Call: searchDocuments
+Planner proposal → (tool path) policy → kernel → tool
   ↓
 Observation: retrieved documents
   ↓
-Final Response
+KernelInput → executeKernel → user-visible response
 ```
 
 ---
 
 ## 🧭 Control Plane Model
 
-| Layer        | Role                        |
-| ------------ | --------------------------- |
-| Orchestrator | decision-making (reasoning) |
-| Policy       | governance                  |
-| Kernel       | execution enforcement       |
-| Tools        | capabilities                |
-| External     | data / systems of record    |
+| Layer        | Role |
+| ------------ | ---- |
+| Planner      | proposes tool calls or text (no final authority) |
+| Intent       | control signal: what kind of request is this? (e.g. tool vs chat) |
+| Orchestrator | enforcement loop; builds `KernelInput` |
+| Policy       | governance before kernel execution |
+| Kernel       | execution + **output authority** (`executeKernel`) |
+| Tools        | capabilities |
+| External     | data / systems of record |
 
 This allows:
 
 - safe extensibility
 - runtime governance
 - composable capabilities
+
+---
+
+## 📜 Runtime evolution (intent, enforcement, output authority)
+
+The system moved from a **model-driven** ReAct loop (where a string “final answer” could bypass validation) to a **governed control-plane runtime**:
+
+1. **Failure semantics (v0.2)** — deterministic vs transient errors; structural normalization; bounded, signal-driven retry when validation fails and normalization cannot fix input.
+2. **Intent (detection)** — `classifyIntent` answers what kind of request this is (`requiresTool`, `type`), instead of trusting only “what the model returned.”
+3. **Orchestrator (enforcement)** — if a tool was required but the planner returned plain text, the runtime emits a structured refusal (`tool_required_but_not_used`) rather than returning that text as a successful answer.
+4. **Kernel (execution + output authority)** — `KernelInput` is the sole contract out of the orchestrator; **`executeKernel`** is the single emission path for structured chat, refusal, and tool execution results.
+
+**Principles:** model proposes → orchestrator enforces → kernel executes and emits; no execution without validation; single output authority at the kernel boundary.
 
 ---
 
@@ -363,7 +409,7 @@ The runtime functions as a capability router.
 Flow:
 
 ```text
-Planner → Tool Selection → Kernel → Tool Pack → External System
+Planner → Tool Selection → Policy → Kernel → Tool Pack → External System
 ```
 
 The planner selects a tool based on:
@@ -372,7 +418,7 @@ The planner selects a tool based on:
 - available capabilities
 - tool descriptions
 
-The kernel executes the selected tool safely.
+The kernel executes the selected tool safely. Separately, **intent classification** constrains what happens when the planner returns text instead of a tool call (see orchestrator enforcement).
 
 ---
 
@@ -403,10 +449,12 @@ This enables:
 
 The AI Control Plane Runtime provides:
 
-- a layered execution architecture
-- safe tool invocation via a kernel boundary
+- a layered execution architecture with **intent**, **enforcement**, and a **kernel output boundary**
+- safe tool invocation via the kernel (`handleKernelRequest`) and unified responses via **`executeKernel`**
 - governance through a policy layer
 - extensible capabilities via tool packs
 - decoupled knowledge systems
+
+**One-line evolution:** the runtime grew from a model-driven agent into a governed control-plane by adding intent classification, orchestrator enforcement against planner bypass, and centralizing user-visible output through the kernel.
 
 It serves as a foundation for building scalable AI agent platforms.

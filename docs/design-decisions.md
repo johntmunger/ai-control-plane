@@ -20,11 +20,11 @@ The runtime uses a layered architecture:
 ```
 Transport
    ↓
-Orchestrator
+Orchestrator (planner + intent + enforcement → KernelInput)
    ↓
 Policy
    ↓
-Kernel
+Kernel (executeKernel)
    ↓
 Tools
    ↓
@@ -42,11 +42,11 @@ Benefits:
 
 ---
 
-# 2. Kernel as the Execution Boundary
+# 2. Kernel as the Execution and Output Boundary
 
-The **kernel acts as the execution firewall** for the system.
+The **kernel acts as the execution firewall** and, via **`executeKernel`**, as the **single output authority** for the unified `KernelInput` contract.
 
-All tool calls must pass through the kernel.
+All tool calls must pass through the kernel (`handleKernelRequest`). Chat and refusal paths also pass through **`executeKernel`**, so transports do not return raw planner strings as the final payload.
 
 Responsibilities of the kernel:
 
@@ -56,6 +56,7 @@ Responsibilities of the kernel:
 - execution timeout protection
 - error normalization
 - invocation logging
+- structured emission of chat / refusal / tool results
 
 Example protections implemented:
 
@@ -63,7 +64,7 @@ Example protections implemented:
 - tool execution timeouts
 - structured error responses
 
-This ensures that **no unsafe code path can execute outside the kernel**.
+This ensures that **no unsafe code path can execute outside the kernel**, and **no user-visible response is finalized without passing through this boundary**.
 
 ---
 
@@ -192,14 +193,20 @@ Benefits:
 
 # 7. Agent Loop for Reasoning
 
-The runtime uses a simplified **ReAct agent loop**.
+The runtime uses a simplified **ReAct agent loop**, with **enforcement**: the planner proposes; the orchestrator may classify **intent** when the planner returns text and must not allow “final answers” that bypass required tool work.
 
 ```
 prompt
    ↓
-planner
+planner (proposal only)
    ↓
-tool call
+intent / enforcement (when outcome is text)
+   ↓
+KernelInput
+   ↓
+executeKernel
+   ↓
+tool call (when applicable) / structured response
    ↓
 observation
    ↓
@@ -211,8 +218,9 @@ This allows the system to:
 - perform multi-step reasoning
 - gather information through tools
 - refine responses iteratively
+- reject planner bypass when a tool was required
 
-The orchestrator manages this loop.
+The orchestrator manages this loop and builds **`KernelInput`** for each turn.
 
 ---
 
@@ -345,8 +353,33 @@ The architecture was designed to solve common problems in AI systems:
 | monolithic systems        | modular tool packs   |
 | tightly coupled knowledge | external RAG systems |
 | hard to extend agents     | tool registry        |
+| planner bypass / dual output authority | intent + orchestrator enforcement + `executeKernel` |
 
 The result is a **minimal AI control plane runtime** that can scale into a full agent platform.
+
+---
+
+# 13. Intent as a Control Signal
+
+**Intent** answers: *what kind of request is this?* (for example, whether **tool execution is required**), instead of assuming that whatever string the model returns is acceptable.
+
+`classifyIntent` produces a small structured signal (`requiresTool`, `type`). That signal is used when the planner returns **plain text** so the runtime can refuse or route consistently rather than leaking an unvalidated “final answer.”
+
+---
+
+# 14. Orchestrator as the Enforcement Layer
+
+The orchestrator **does not** treat arbitrary model text as a successful completion when intent says a tool was required. In that case it produces a structured **`KernelInput`** of type refusal (for example `tool_required_but_not_used`) instead of returning the model string.
+
+This removes **dual authority** (model vs system) for tool-required tasks: the model proposes; the system enforces.
+
+---
+
+# 15. Kernel as Execution + Output Authority
+
+**`KernelInput`** is the only contract between the orchestrator and the emission layer. **`executeKernel`** turns that contract into user-visible structured results (tool execution envelope, chat payload, or refusal payload).
+
+Design consequence: transports and CLIs should use **`orchestrate` → `executeKernel`**, not `orchestrate` alone, when emitting responses to users.
 
 ---
 

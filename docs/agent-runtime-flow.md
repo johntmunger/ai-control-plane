@@ -8,20 +8,20 @@ It explains how a user prompt moves through the transport layer, orchestrator, p
 
 # Overview
 
-The runtime implements a **ReAct-style agent loop** that allows models to reason, call tools, observe results, and continue reasoning until a final answer is produced.
+The runtime implements a **ReAct-style agent loop** with **intent** and **enforcement**: the planner proposes; the orchestrator builds **`KernelInput`**; **`executeKernel`** emits user-visible output (no raw planner bypass for tool-required work).
 
 High-level flow:
 
 User Prompt  
 → Transport Layer  
-→ Orchestrator  
-→ Policy Layer  
-→ Kernel  
+→ Orchestrator (planner → intent if needed → enforcement)  
+→ **KernelInput**  
+→ **executeKernel** (policy and `handleKernelRequest` on tool paths)  
 → Tool Execution  
 → External Systems (RAG, APIs, etc.)  
-→ Result Returned  
+→ Result / observation  
 → Orchestrator Continues Reasoning  
-→ Final Answer
+→ **executeKernel** → structured response
 
 ---
 

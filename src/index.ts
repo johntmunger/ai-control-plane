@@ -2,6 +2,7 @@ import "dotenv/config";
 import "./transport/stdio";
 
 import { initTools } from "./tools/init";
+import { executeKernel } from "./runtime/kernel";
 import { orchestrate } from "./runtime/orchestrator"; // make sure this is imported
 import { listToolMetadata } from "./tools/registry";
 
@@ -13,7 +14,8 @@ initTools();
 async function main() {
   const prompt = process.argv.slice(2).join(" ") || "Add 2 and 3";
 
-  const result = await orchestrate(prompt);
+  const kernelInput = await orchestrate(prompt);
+  const result = await executeKernel(kernelInput);
   console.log(JSON.stringify(result, null, 2));
 }
 

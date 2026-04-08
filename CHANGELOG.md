@@ -4,6 +4,33 @@
 
 All notable changes to the AI Control Plane Runtime will be documented in this file.
 
+### 🚀 v0.4.0 — Intent, Enforcement, and Diagram / Transport Alignment
+
+#### feat(control-plane): document and align intent layer with kernel output authority
+
+This release captures the **intent → enforcement → `KernelInput` → `executeKernel`** story in `ARCHITECTURE.md` and `/docs`, fixes the **execution diagram** so “final response” is not shown as originating from the orchestrator, and aligns **STDIO** (and the dev `main` path) with **`orchestrate` → `executeKernel`** so user-visible output matches the unified contract.
+
+#### ✨ Documentation & assets
+
+- Added `docs/diagrams/runtime-execute.mmd` as the source for `mermaid-diagram-execute.png` (regenerate with `@mermaid-js/mermaid-cli`).
+- Updated `docs/architecture-diagram.md`, `docs/design-decisions.md` (sections 13–15), `docs/ai-control-plane.md`, and `docs/agent-runtime-flow.md` for intent, orchestrator enforcement, and kernel as execution + output authority.
+- Recorded **runtime evolution** in `ARCHITECTURE.md`: failure semantics (v0.2), intent detection, orchestrator enforcement (structured refusal when a tool was required but the planner returned only text, e.g. `tool_required_but_not_used`), and kernel-only emission via `executeKernel`.
+
+#### 🔄 Changed
+
+- **Transport (`src/transport/stdio.ts`)**: prompt handling now runs `executeKernel` on the orchestrator’s `KernelInput` before writing stdout.
+- **Dev entry (`src/index.ts`)**: same `orchestrate` → `executeKernel` sequence for local runs.
+
+#### 🧠 Architectural intent (summary)
+
+| Concern | Mechanism |
+| ------- | --------- |
+| What kind of request is this? | `classifyIntent` (`requiresTool`, `type`) |
+| Prevent planner bypass for tool-required work | Orchestrator emits refusal `KernelInput` instead of accepting plain text |
+| Single output authority | `executeKernel` |
+
+---
+
 ### 🚀 v0.3.0 — Kernel Authority & Unified Execution Boundary
 
 #### feat(control-plane): enforce kernel as single execution + output authority
@@ -85,7 +112,7 @@ This change transitions the system from a model-driven application to a governed
 
 - model → proposes
 - kernel → validates
-- orchestrator → decides
+- orchestrator → decides escalation and loop control (later refined in v0.3+ to **enforcement** + `KernelInput`; see v0.4.0)
 
 #### 🧪 Validated Through
 

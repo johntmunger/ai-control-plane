@@ -95,7 +95,8 @@ Responsibilities:
 - receive JSON requests
 - parse incoming messages
 - detect request type
-- route to orchestrator or policy layer
+- route prompts through `orchestrate` then **`executeKernel`**
+- route direct tool calls through policy → kernel
 - return JSON responses
 
 Example request types:
@@ -123,9 +124,11 @@ Implements the **agent reasoning loop**.
 Responsibilities:
 
 - interpret user prompt
-- decide when to call tools
+- run the planner (proposal only)
+- classify **intent** when the planner returns text (`src/runtime/intent.ts`)
+- **enforce** tool-required requests (no planner bypass via raw strings)
 - track execution history
-- produce final answers
+- produce **`KernelInput`** for `executeKernel` (not ad hoc final strings)
 
 Pseudo flow:
 
@@ -134,7 +137,11 @@ prompt
   ↓
 planner
   ↓
-tool call
+intent / enforcement (when needed)
+  ↓
+KernelInput → executeKernel
+  ↓
+tool call or structured response
   ↓
 observation
   ↓
@@ -142,6 +149,12 @@ repeat
 ```
 
 This enables **multi-step reasoning agents**.
+
+---
+
+## `src/runtime/intent.ts`
+
+**Intent classification** for control (not content): whether the user’s prompt **requires tool execution** and a coarse `type` (`tool` | `chat` | `refusal`). Used when the planner returns plain text so the orchestrator can refuse planner bypass for tool-required work.
 
 ---
 
@@ -173,17 +186,18 @@ Policy sits **between orchestration and execution**.
 
 ## `src/runtime/kernel.ts`
 
-The kernel is the **secure execution engine**.
+The kernel is the **secure execution engine** and exposes **`executeKernel`**, which turns **`KernelInput`** into structured user-visible output (tool envelope, chat, or refusal).
 
 Responsibilities:
 
-- validate requests
+- validate requests (`handleKernelRequest` for tools)
 - resolve tools
-- validate tool arguments
+- validate tool arguments (with optional per-tool normalization)
 - execute tools
 - enforce timeouts
 - normalize errors
 - log invocations
+- emit structured payloads for chat and refusal paths via `executeKernel`
 
 Example protections:
 

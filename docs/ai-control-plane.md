@@ -15,28 +15,28 @@ User Prompt
 Transport Layer
      │
      ▼
-Orchestrator
+Orchestrator (planner → intent if text → enforcement)
      │
      ▼
-Policy Layer
+KernelInput
      │
      ▼
-Kernel
+executeKernel (Policy → kernel on tool paths inside)
      │
      ▼
-Tool Execution
+Tool Execution (when applicable)
      │
      ▼
 External Systems
      │
      ▼
-Result Returned
+Observation / structured result
      │
      ▼
-Orchestrator Continues
+Orchestrator Continues (loop)
      │
      ▼
-Final Response
+executeKernel → User-visible response
 ```
 
 ---
@@ -66,7 +66,8 @@ Responsibilities:
 - receive incoming JSON
 - parse the message
 - determine request type
-- route to orchestrator or kernel
+- route prompts through `orchestrate` then `executeKernel`
+- route direct tool calls through policy → kernel
 - return structured responses
 
 Two types of requests can arrive:
@@ -97,29 +98,30 @@ src/runtime/orchestrator.ts
 
 The orchestrator runs the **agent reasoning loop**.
 
-It repeatedly decides:
-
-- whether to call a tool
-- whether to return a final answer
+The planner **proposes** a tool call or text. The orchestrator **does not** return arbitrary model text as the transport response when intent indicates a tool was required; it builds a **`KernelInput`** and the transport passes it to **`executeKernel`**.
 
 Pseudo logic:
 
 ```
 history = []
 
-while true:
+decision = planner(prompt, history)
 
-  decision = planner(prompt, history)
+if decision is plain text:
+    intent = classifyIntent(prompt)
+    if intent.requiresTool:
+        kernelInput = refusal   // no planner bypass
+    else:
+        kernelInput = { type: "chat", message: decision }
 
-  if decision is final answer:
-      return response
+if decision is tool call:
+    result = policy → kernel → tool (with normalization / escalation as needed)
+    kernelInput = wrap result as chat or refusal
 
-  if decision is tool call:
-      execute tool
-      append result to history
+return kernelInput   // caller: executeKernel(kernelInput) → user-visible output
 ```
 
-This pattern is often called the **ReAct loop**.
+This pattern is often called the **ReAct loop**, extended with **intent** and **enforcement**.
 
 ---
 
@@ -362,19 +364,21 @@ to variables from its outer lexical scope.
 
 ---
 
-# Step 12 — Final Response
+# Step 12 — Response via the kernel
 
-The runtime returns the final result.
+The transport returns the result of **`executeKernel(KernelInput)`**, not a legacy `"final"` string from the orchestrator alone.
 
-Example:
+Example (chat path):
 
 ```
 {
-  "type": "final",
-  "message": "A JavaScript closure is...",
-  "history": [...]
+  "type": "chat",
+  "content": "A JavaScript closure is...",
+  "timestamp": 1234567890
 }
 ```
+
+Refusal and tool paths return their corresponding structured shapes from `executeKernel`.
 
 ---
 
@@ -391,15 +395,15 @@ Runtime execution:
 ```
 prompt received
    ↓
-orchestrator decides search is required
+planner proposes searchDocuments
    ↓
-searchDocuments tool invoked
+policy → kernel → searchDocuments
    ↓
 RAG system retrieves relevant docs
    ↓
-context returned to orchestrator
+observation returned to orchestrator
    ↓
-final answer generated
+KernelInput → executeKernel → structured response
 ```
 
 ---
@@ -422,11 +426,13 @@ Each layer has a single responsibility.
 ```
 LLM / Planner
      ↓
-Orchestrator
+Intent (when planner returns text)
+     ↓
+Orchestrator → KernelInput
      ↓
 Policy
      ↓
-Kernel
+Kernel (executeKernel)
      ↓
 Tools
      ↓

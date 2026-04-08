@@ -10,8 +10,9 @@ registerToolPack(repoToolsPack);
 async function run() {
   const prompts = [
     "What files are in src/tools?", // tool
-    "hello there", // chat
-    "compute something weird", // edge / refusal
+    // "Add 2 and 3", // tool? or refusal?
+    // "hello there", // chat
+    // "compute something weird", // edge / refusal
   ];
 
   for (const prompt of prompts) {

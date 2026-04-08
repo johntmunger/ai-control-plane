@@ -1,5 +1,6 @@
 import readline from "node:readline";
 import { handlePolicyRequest } from "../runtime/policy";
+import { executeKernel } from "../runtime/kernel";
 import { orchestrate } from "../runtime/orchestrator";
 
 const rl = readline.createInterface({
@@ -34,7 +35,8 @@ rl.on("line", async (line) => {
   }
 
   if ("prompt" in input) {
-    const response = await orchestrate(input.prompt);
+    const kernelInput = await orchestrate(input.prompt);
+    const response = await executeKernel(kernelInput);
 
     process.stdout.write(JSON.stringify(response) + "\n");
 

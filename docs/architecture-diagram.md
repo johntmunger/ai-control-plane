@@ -6,6 +6,8 @@ This document visualizes how the runtime, tools, and external systems connect.
 
 # High Level Architecture
 
+Intent classification and orchestrator enforcement sit **inside** the agent loop (`src/runtime/orchestrator.ts`, `src/runtime/intent.ts`). **KernelInput** flows to **`executeKernel`** (`src/runtime/kernel.ts`); user-visible output is produced there, not by returning raw planner strings from the orchestrator.
+
 ```
                         USER
                          │
@@ -24,7 +26,9 @@ This document visualizes how the runtime, tools, and external systems connect.
                          ▼
                 ┌─────────────────┐
                 │  ORCHESTRATOR    │
-                │  Agent Loop      │
+                │  Planner → Intent│
+                │  → enforcement   │
+                │  → KernelInput   │
                 │ src/runtime      │
                 └─────────────────┘
                          │
@@ -37,7 +41,8 @@ This document visualizes how the runtime, tools, and external systems connect.
                          ▼
                 ┌─────────────────┐
                 │     KERNEL       │
-                │ Execution Engine │
+                │ executeKernel +  │
+                │ tool execution   │
                 └─────────────────┘
                          │
                          ▼
@@ -70,7 +75,10 @@ This document visualizes how the runtime, tools, and external systems connect.
                      CONTEXT
                          │
                          ▼
-                     FINAL ANSWER
+              KernelInput → executeKernel
+                         │
+                         ▼
+                 USER-VISIBLE RESPONSE
 ```
 
 ---
@@ -81,16 +89,13 @@ This document visualizes how the runtime, tools, and external systems connect.
 User Prompt
       │
       ▼
-Orchestrator
+Orchestrator (planner proposal)
       │
       ▼
-Planner Decision
+Planner Decision (tool call or text)
       │
       ▼
-Tool Invocation
-      │
-      ▼
-Kernel Execution
+Tool path: Policy → Kernel → Tool
       │
       ▼
 Tool Implementation
@@ -99,13 +104,16 @@ Tool Implementation
 External System
       │
       ▼
-Result Returned
+Result / observation
       │
       ▼
-Orchestrator Continues
+Orchestrator builds KernelInput
       │
       ▼
-Final Response
+executeKernel(KernelInput)
+      │
+      ▼
+User-visible response
 ```
 
 ---
@@ -141,16 +149,19 @@ Agent Response
 # Runtime Responsibility Model
 
 ```
-LLM / Planner
+LLM / Planner (proposes)
       │
       ▼
-Orchestrator
+Intent (control signal when outcome is text)
+      │
+      ▼
+Orchestrator (enforces → KernelInput)
       │
       ▼
 Policy
       │
       ▼
-Kernel
+Kernel (executeKernel — execution + output authority)
       │
       ▼
 Tools
