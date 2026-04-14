@@ -4,9 +4,13 @@ import { UnknownToolError } from "../tools/errors/types";
 import { normalizeError } from "../tools/errors/normalize";
 import { withTimeout } from "../utils/timeout";
 import { logInvocation } from "../utils/logging";
-import type { KernelInput } from "../types/control-plane.";
+import type { KernelInput } from "../types/control-plane";
+import { TraceContext } from "./trace";
 
-export async function handleKernelRequest(request: unknown) {
+export async function handleKernelRequest(
+  request: unknown,
+  trace?: TraceContext,
+) {
   let id: string | null = null;
   let normalizationApplied = false; // ✅ single source of truth
 
@@ -56,12 +60,25 @@ export async function handleKernelRequest(request: unknown) {
       normalization_applied: normalizationApplied,
     });
 
+    trace?.push({
+      type: "tool_invocation",
+      tool: toolDef.name,
+      args: parsedArgs,
+    });
+
     // --- execution ---
     logInvocation(id ?? "unknown", toolDef.name, parsedArgs);
 
     const startTime = Date.now();
     const result = await withTimeout(toolDef.execute(parsedArgs), 2000);
     const duration = Date.now() - startTime;
+
+    trace?.push({
+      type: "tool_result",
+      tool: toolDef.name,
+      result,
+      duration,
+    });
 
     console.error("KERNEL RESULT:", {
       id,
@@ -91,18 +108,33 @@ export async function handleKernelRequest(request: unknown) {
 }
 
 /** Uniform entry for orchestrator-shaped `KernelInput` (tool / chat / refusal). */
-export async function executeKernel(input: KernelInput) {
+export async function executeKernel(input: KernelInput, trace?: TraceContext) {
   console.log("KERNEL INPUT:", input.type);
 
   switch (input.type) {
-    case "tool":
-      return handleKernelRequest({
-        id: crypto.randomUUID(),
-        tool: input.tool,
-        arguments: input.arguments,
+    case "tool": {
+      const result = await handleKernelRequest(
+        {
+          id: crypto.randomUUID(),
+          tool: input.tool,
+          arguments: input.arguments,
+        },
+        trace,
+      );
+
+      trace?.push({
+        type: "kernel_output",
+        outputType: "chat",
       });
 
+      return result;
+    }
+
     case "chat":
+      trace?.push({
+        type: "kernel_output",
+        outputType: "chat",
+      });
       return {
         type: "chat" as const,
         content: input.message,
@@ -110,6 +142,10 @@ export async function executeKernel(input: KernelInput) {
       };
 
     case "refusal":
+      trace?.push({
+        type: "kernel_output",
+        outputType: "refusal",
+      });
       return {
         type: "refusal" as const,
         reason: input.reason ?? "unspecified",

@@ -3,7 +3,8 @@ import { modelRouter } from "../models/router";
 import { handlePolicyRequest } from "./policy";
 import { listToolMetadata } from "../tools/registry";
 import { classifyIntent } from "./intent";
-import type { KernelInput } from "../types/control-plane.";
+import type { KernelInput } from "../types/control-plane";
+import { TraceContext } from "./trace";
 
 function formatRefusalReason(message: unknown): string {
   if (typeof message === "string") return message;
@@ -151,11 +152,19 @@ Return ONLY valid JSON arguments.
 }
 
 // 🔥 MAIN ORCHESTRATOR
-export async function orchestrate(prompt: string): Promise<KernelInput> {
+export async function orchestrate(
+  prompt: string,
+  trace?: TraceContext,
+): Promise<KernelInput> {
   const history: MessageParam[] = [];
   const tools = listToolMetadata();
 
   const decision = await modelRouter.plan(prompt, history, tools);
+
+  trace?.push({
+    type: "planner",
+    decision: (decision as any)?.tool ?? (decision as any)?.text ?? "unknown",
+  });
 
   // ✅ Normalize immediately
   let kernelInput: KernelInput;
@@ -164,6 +173,11 @@ export async function orchestrate(prompt: string): Promise<KernelInput> {
     const { requiresTool } = await classifyIntent(prompt);
 
     if (requiresTool) {
+      trace?.push({
+        type: "enforcement",
+        action: "refuse",
+      });
+
       return {
         type: "refusal",
         reason: "tool_required_but_not_used",
