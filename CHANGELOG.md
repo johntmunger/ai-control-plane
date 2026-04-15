@@ -4,6 +4,63 @@
 
 All notable changes to the AI Control Plane Runtime will be documented in this file.
 
+### 🚀 v0.5.0 — End-to-End Control Plane Execution + Trace Integrity
+
+#### feat(runtime): complete orchestrator → kernel → tool → chat loop with verifiable trace
+
+This release marks the first **fully operational control-plane runtime loop**, where planner intent, kernel execution, enforcement, and user-visible output are unified under a single deterministic flow.
+
+#### ✨ Added
+
+- End-to-end `/agent` runtime integrating:
+  - `orchestrate` (planner)
+  - `executeKernel` (execution boundary)
+  - double-pass execution (tool → chat)
+- Structured `TraceContext` capturing:
+  - planner decision
+  - tool invocation
+  - enforcement decision
+  - tool result
+  - kernel output
+- Kernel-level enforcement layer with explicit allow/deny decisions emitted into trace
+- Invariant guard ensuring all tool executions produce:
+  - `tool_invocation`
+  - `tool_result`
+
+#### 🔄 Changed
+
+- Refactored orchestrator to be strictly **planner-only**:
+  - removed all execution and result fabrication
+- Unified `/agent` GET + POST behavior to follow:
+  - `orchestrate → executeKernel → (optional chat pass) → response`
+- Centralized answer extraction logic for tool + chat outputs
+- Ensured all user-visible output originates exclusively from kernel execution
+
+#### 🔒 Guarantees Established
+
+- No tool execution without trace visibility
+- No output without passing through kernel
+- Enforcement decisions are observable and auditable
+- Trace reflects **actual execution**, not synthetic events
+
+#### 🧠 Architectural Impact
+
+- Transitions system from “component architecture” → **working control-plane runtime**
+- Establishes trace as a **first-class system artifact**
+- Makes execution behavior:
+  - deterministic
+  - inspectable
+  - debuggable without guesswork
+
+#### 🔥 Why This Matters
+
+This is the point where:
+
+- the model no longer “feels like” it’s doing work
+- the system **proves** what actually happened
+
+> The runtime is now governed, observable, and verifiable end-to-end.
+
 ### 🚀 v0.4.0 — Intent, Enforcement, and Diagram / Transport Alignment
 
 #### feat(control-plane): document and align intent layer with kernel output authority
@@ -23,11 +80,11 @@ This release captures the **intent → enforcement → `KernelInput` → `execut
 
 #### 🧠 Architectural intent (summary)
 
-| Concern | Mechanism |
-| ------- | --------- |
-| What kind of request is this? | `classifyIntent` (`requiresTool`, `type`) |
+| Concern                                       | Mechanism                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------------ |
+| What kind of request is this?                 | `classifyIntent` (`requiresTool`, `type`)                                |
 | Prevent planner bypass for tool-required work | Orchestrator emits refusal `KernelInput` instead of accepting plain text |
-| Single output authority | `executeKernel` |
+| Single output authority                       | `executeKernel`                                                          |
 
 ---
 
