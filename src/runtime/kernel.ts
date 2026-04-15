@@ -7,12 +7,40 @@ import { logInvocation } from "../utils/logging";
 import type { KernelInput } from "../types/control-plane";
 import { TraceContext } from "./trace";
 
+/**
+ * 🔒 Enforcement Layer
+ *
+ * Central place to allow / deny tool execution
+ */
+function enforceToolAccess(toolName: string) {
+  // 🔧 Simple policy for now (expand later)
+  const deniedTools: string[] = [];
+
+  if (deniedTools.includes(toolName)) {
+    return {
+      decision: "deny" as const,
+      reason: "tool_not_allowed",
+    };
+  }
+
+  return {
+    decision: "allow" as const,
+  };
+}
+
+/**
+ * Handles execution of a tool request inside the kernel boundary.
+ * Guarantees:
+ * - tool_invocation is always emitted
+ * - tool_result is always emitted (success OR error)
+ */
 export async function handleKernelRequest(
   request: unknown,
   trace?: TraceContext,
 ) {
   let id: string | null = null;
-  let normalizationApplied = false; // ✅ single source of truth
+  let normalizationApplied = false;
+  let toolName: string | null = null;
 
   try {
     const parsedRequest = KernelRequestSchema.parse(request);
@@ -20,6 +48,43 @@ export async function handleKernelRequest(
     id = parsedRequest.id ?? null;
 
     const { tool, arguments: args } = parsedRequest;
+    toolName = tool;
+
+    // ✅ ALWAYS emit invocation
+    trace?.push({
+      type: "tool_invocation",
+      tool,
+      args,
+    });
+
+    // 🔒 ENFORCEMENT
+    const enforcement = enforceToolAccess(tool);
+
+    trace?.push({
+      type: "enforcement",
+      tool,
+      decision: enforcement.decision,
+      reason: enforcement.reason ?? null,
+    });
+
+    if (enforcement.decision === "deny") {
+      trace?.push({
+        type: "tool_result",
+        tool,
+        error: {
+          type: "policy",
+          message: enforcement.reason,
+        },
+      });
+
+      return {
+        id,
+        error: {
+          type: "policy",
+          message: enforcement.reason,
+        },
+      };
+    }
 
     const toolDef = getTool(tool);
 
@@ -27,17 +92,15 @@ export async function handleKernelRequest(
       throw new UnknownToolError(tool);
     }
 
-    // --- normalization (optional, tool-scoped) ---
+    // --- normalization ---
     let normalizedArgs = args;
 
     if (toolDef.normalize) {
       const result = toolDef.normalize(args);
-
       const didChange = JSON.stringify(result) !== JSON.stringify(args);
 
       normalizedArgs = result;
 
-      // ✅ ONLY mark true if change AND VALID
       if (didChange) {
         try {
           toolDef.schema.parse(result);
@@ -48,10 +111,9 @@ export async function handleKernelRequest(
       }
     }
 
-    // --- validation (authoritative) ---
+    // --- validation ---
     const parsedArgs = toolDef.schema.parse(normalizedArgs);
 
-    // --- observability ---
     console.debug("KERNEL NORMALIZATION:", {
       id,
       tool: toolDef.name,
@@ -60,17 +122,13 @@ export async function handleKernelRequest(
       normalization_applied: normalizationApplied,
     });
 
-    trace?.push({
-      type: "tool_invocation",
-      tool: toolDef.name,
-      args: parsedArgs,
-    });
-
     // --- execution ---
     logInvocation(id ?? "unknown", toolDef.name, parsedArgs);
 
     const startTime = Date.now();
+
     const result = await withTimeout(toolDef.execute(parsedArgs), 2000);
+
     const duration = Date.now() - startTime;
 
     trace?.push({
@@ -80,10 +138,10 @@ export async function handleKernelRequest(
       duration,
     });
 
-    console.error("KERNEL RESULT:", {
+    console.log("KERNEL RESULT:", {
       id,
-      result,
       tool: toolDef.name,
+      result,
       duration,
     });
 
@@ -97,9 +155,17 @@ export async function handleKernelRequest(
       },
     };
   } catch (err) {
+    const normalized = normalizeError(err);
+
+    trace?.push({
+      type: "tool_result",
+      tool: toolName ?? "unknown",
+      error: normalized,
+    });
+
     return {
       id,
-      error: normalizeError(err),
+      error: normalized,
       meta: {
         normalization_applied: normalizationApplied,
       },
@@ -107,12 +173,17 @@ export async function handleKernelRequest(
   }
 }
 
-/** Uniform entry for orchestrator-shaped `KernelInput` (tool / chat / refusal). */
+/**
+ * Main kernel entry point.
+ */
 export async function executeKernel(input: KernelInput, trace?: TraceContext) {
+  console.log("🔥 EXECUTE KERNEL HIT:", JSON.stringify(input));
   console.log("KERNEL INPUT:", input.type);
 
   switch (input.type) {
     case "tool": {
+      const beforeLength = trace?.events.length ?? 0;
+
       const result = await handleKernelRequest(
         {
           id: crypto.randomUUID(),
@@ -122,6 +193,21 @@ export async function executeKernel(input: KernelInput, trace?: TraceContext) {
         trace,
       );
 
+      // 🔒 INVARIANT GUARD
+      const afterEvents = trace ? trace.events.slice(beforeLength) : [];
+
+      const hasInvocation = afterEvents.some(
+        (e) => e.type === "tool_invocation",
+      );
+
+      const hasResult = afterEvents.some((e) => e.type === "tool_result");
+
+      if (!hasInvocation || !hasResult) {
+        throw new Error(
+          "KERNEL INVARIANT VIOLATION: Missing tool execution trace",
+        );
+      }
+
       trace?.push({
         type: "kernel_output",
         outputType: "chat",
@@ -130,27 +216,31 @@ export async function executeKernel(input: KernelInput, trace?: TraceContext) {
       return result;
     }
 
-    case "chat":
+    case "chat": {
       trace?.push({
         type: "kernel_output",
         outputType: "chat",
       });
+
       return {
         type: "chat" as const,
         content: input.message,
         timestamp: Date.now(),
       };
+    }
 
-    case "refusal":
+    case "refusal": {
       trace?.push({
         type: "kernel_output",
         outputType: "refusal",
       });
+
       return {
         type: "refusal" as const,
         reason: input.reason ?? "unspecified",
         timestamp: Date.now(),
       };
+    }
 
     default: {
       const _exhaustive: never = input;
