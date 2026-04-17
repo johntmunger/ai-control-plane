@@ -4,6 +4,7 @@ import "./transport/stdio";
 import { initTools } from "./tools/init";
 import { executeKernel } from "./runtime/kernel";
 import { orchestrate } from "./runtime/orchestrator"; // make sure this is imported
+import { createTrace } from "./runtime/trace";
 import { listToolMetadata } from "./tools/registry";
 
 initTools();
@@ -14,8 +15,9 @@ initTools();
 async function main() {
   const prompt = process.argv.slice(2).join(" ") || "Add 2 and 3";
 
-  const kernelInput = await orchestrate(prompt);
-  const result = await executeKernel(kernelInput);
+  const trace = createTrace();
+  const kernelInput = await orchestrate(prompt, trace);
+  const result = await executeKernel(kernelInput, trace);
   console.log(JSON.stringify(result, null, 2));
 }
 

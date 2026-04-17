@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { executeKernel } from "../src/runtime/kernel";
 import { orchestrate } from "../src/runtime/orchestrator";
+import { createTrace } from "../src/runtime/trace";
 import { registerToolPack } from "../src/tools/registry";
 import { repoToolsPack } from "../src/tools/repo";
 
@@ -19,8 +20,9 @@ async function run() {
     console.log("\n---");
     console.log("PROMPT:", prompt);
 
-    const kernelInput = await orchestrate(prompt);
-    const result = await executeKernel(kernelInput);
+    const trace = createTrace();
+    const kernelInput = await orchestrate(prompt, trace);
+    const result = await executeKernel(kernelInput, trace);
 
     // 🚨 CRITICAL: ensure no raw string ever leaks
     if (typeof result === "string") {

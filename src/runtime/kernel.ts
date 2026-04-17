@@ -210,7 +210,7 @@ export async function executeKernel(input: KernelInput, trace?: TraceContext) {
 
       trace?.push({
         type: "kernel_output",
-        outputType: "chat",
+        outputType: "tool",
       });
 
       return result;

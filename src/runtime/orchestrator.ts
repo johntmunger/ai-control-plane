@@ -1,9 +1,7 @@
-import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
-import { modelRouter } from "../models/router";
 import { classifyIntent } from "./intent";
-import { listToolMetadata } from "../tools/registry";
 import type { KernelInput } from "../types/control-plane";
 import { TraceContext } from "./trace";
+import { extractPartial } from "./extractNumbers";
 
 /**
  * Utility: normalize refusal messages
@@ -31,69 +29,49 @@ export async function orchestrate(
   prompt: string,
   trace?: TraceContext,
 ): Promise<KernelInput> {
-  const history: MessageParam[] = [];
-  const tools = listToolMetadata();
+  const intent = await classifyIntent(prompt);
 
-  // 🔧 TEMP: heuristic planner (replace with modelRouter.plan later)
-  const decision = prompt.toLowerCase().includes("add")
-    ? {
-        tool: "core.add",
-        arguments: { a: 2, b: 3 },
-      }
-    : {
-        type: "chat",
-        message: "Fallback response",
-      };
-
-  // 🧠 TRACE: planner decision
   trace?.push({
     type: "planner",
-    decision: (decision as any)?.tool ?? (decision as any)?.type ?? "unknown",
+    decision: intent.tool ?? intent.type,
   });
 
-  /**
-   * Case 1: planner returned raw text (string)
-   */
-  if (typeof decision === "string") {
-    const intent = await classifyIntent(prompt);
-
-    // 🔒 If tool required but not used → refusal
-    if (intent.requiresTool) {
-      trace?.push({
-        type: "enforcement",
-        action: "refuse",
-      });
-
-      return {
-        type: "refusal",
-        reason: "tool_required_but_not_used",
-      };
-    }
-
+  if (intent.type === "refusal") {
     return {
-      type: "chat",
-      message: decision,
+      type: "refusal",
+      reason: "intent_refusal",
     };
   }
 
+  const decision =
+    intent.tool === "core.add"
+      ? {
+          tool: "core.add",
+          arguments: extractPartial(prompt),
+        }
+      : {
+          type: "chat",
+          message: "Fallback response",
+        };
+
   /**
-   * Case 2: planner returned tool decision
+   * Case 1: planner returned tool decision
    */
-  if ((decision as any).tool) {
+  if ((decision as { tool?: string }).tool) {
     return {
       type: "tool",
-      tool: (decision as any).tool,
-      arguments: (decision as any).arguments ?? {},
+      tool: (decision as { tool: string }).tool,
+      arguments: (decision as { arguments?: unknown }).arguments ?? {},
     };
   }
 
   /**
-   * Case 3: planner returned chat object
+   * Case 2: planner returned chat object
    */
-  if ((decision as any).type === "chat") {
+  if ((decision as { type?: string }).type === "chat") {
     return {
       type: "chat",
-      message: (decision as any).message ?? "No response",
+      message: (decision as { message?: string }).message ?? "No response",
     };
   }
 
