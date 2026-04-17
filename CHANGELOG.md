@@ -4,6 +4,60 @@
 
 All notable changes to the AI Control Plane Runtime will be documented in this file.
 
+### 🚀 v0.6.0 — Flexible Argument Extraction + Planner/Kernel Alignment
+
+#### feat(runtime): enable partial argument extraction while preserving strict planner guarantees
+
+This release resolves a key mismatch between planner strictness and kernel normalization, allowing the system to handle natural language inputs (e.g. `"Add 3 and four"`) without weakening control-plane guarantees.
+
+---
+
+#### ✨ Added
+
+- **`extractPartial(prompt)`**
+  - Extends `extractNumbers` to support:
+    - digit inputs (`3`, `11`)
+    - word-based numbers (`one`–`twenty`)
+    - mixed inputs (`3 and four`)
+  - Falls back to string tokens to allow kernel normalization or validation failure
+
+- **`hasTwoResolvableAddends(prompt)`**
+  - Ensures intent heuristics remain conservative while enabling flexible parsing
+
+---
+
+#### 🔄 Changed
+
+- **Orchestrator**
+  - Always routes `core.add` when `intent.tool === "core.add"`
+  - No longer blocks tool execution based on digit-only parsing
+
+- **Intent layer**
+  - Supports optional `tool` field
+  - Preserves structured tool outputs from model responses
+  - Infers `core.add` from mixed-format prompts
+
+---
+
+#### 🧠 Architectural Impact
+
+- Shifts system from:
+  - **strict planner + strict parsing**
+    → to:
+  - **strict planner + flexible argument extraction + strict kernel enforcement**
+
+- Ensures normalization is applied in real runtime paths (not only in isolated tests)
+
+- Maintains guarantees:
+  - no tool execution without planner approval
+  - no output without kernel validation
+
+---
+
+#### 🔥 Why This Matters
+
+Previously, valid user inputs could be rejected before reaching the kernel:
+
 ### 🚀 v0.5.0 — End-to-End Control Plane Execution + Trace Integrity
 
 #### feat(runtime): complete orchestrator → kernel → tool → chat loop with verifiable trace
