@@ -4,6 +4,99 @@
 
 All notable changes to the AI Control Plane Runtime will be documented in this file.
 
+### 🚀 v0.7.0 — Deterministic Execution Guarantees + Trace as System Invariant
+
+#### feat(control-plane): enforce validation-gated execution, explicit normalization stage, and namespaced tool registry
+
+This release strengthens the control-plane runtime by making execution correctness, observability, and tool resolution fully deterministic and auditable.
+
+---
+
+#### ✨ Added
+
+- **Explicit normalization stage in kernel execution**
+  - Introduced `tool_normalization` trace event
+  - Captures transformation from `rawArgs` → `normalizedArgs`
+  - Preserves immutable planner input via argument snapshotting
+
+- **Structured validation error surface**
+  - Replaced raw error stacks with deterministic, serializable error objects
+  - Includes:
+    - `type`, `message`
+    - structured `details` (path, code, message)
+    - `normalizedArgs` context for debugging
+
+- **Namespaced tool registry (`registerToolPack`)**
+  - Tools are registered under domain namespaces (e.g. `core.add`)
+  - Aligns runtime with multi-domain and MCP-compatible architecture
+
+---
+
+#### 🔄 Changed
+
+- **Kernel execution model**
+  - Validation now enforced via `safeParse` (no exception-driven flow)
+  - Execution is strictly gated:
+    - invalid input → no tool execution
+    - no `kernel_output` emitted on failure
+
+  - `tool_result` standardized to:
+    - `{ status: "success" | "error" }`
+
+- **Trace model upgraded to execution narrative**
+  - Trace now reflects actual lifecycle stages:
+    - `tool_invocation → enforcement → tool_normalization → tool_result → kernel_output`
+
+  - Removed ambiguity between raw and transformed inputs
+  - Eliminated stack traces and non-deterministic error output
+
+- **Test harness alignment**
+  - Test execution now routed through `executeKernel`
+  - Eliminates simulated trace paths in favor of real runtime behavior
+
+---
+
+#### 🔒 Guarantees Established
+
+- No execution without validation
+- No output without successful execution
+- All argument transformations are observable
+- All failures are explicit, structured, and replayable
+- Trace reflects **actual execution**, not inferred or simulated behavior
+
+---
+
+#### 🧠 Architectural Impact
+
+- Elevates trace from debugging artifact → **system invariant**
+- Establishes kernel as:
+  - execution authority
+  - validation gate
+  - source of truth for all runtime behavior
+
+- Introduces clear separation between:
+  - planner intent (`rawArgs`)
+  - kernel transformation (`normalizedArgs`)
+  - validated execution (`parsedArgs`)
+
+---
+
+#### 🔥 Why This Matters
+
+This release ensures the system does not merely execute—it **explains itself with complete fidelity**.
+
+Failures are no longer ambiguous, transformations are no longer hidden, and execution boundaries are strictly enforced.
+
+> The runtime is now not only observable, but _trustworthy by construction_.
+
+---
+
+#### 🚀 Next
+
+- Introduce **ExecutionFrames** as a first-class runtime structure
+  - replacing event reconstruction with direct state representation
+  - enabling devtools-style inspection and streaming execution visibility
+
 ### 🚀 v0.6.0 — Flexible Argument Extraction + Planner/Kernel Alignment
 
 #### feat(runtime): enable partial argument extraction while preserving strict planner guarantees

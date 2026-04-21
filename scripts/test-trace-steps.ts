@@ -3,6 +3,10 @@ import { createTrace } from "../src/runtime/trace";
 import { registerToolPack } from "../src/tools/registry";
 import { addTool } from "../src/tools/core/add";
 
+// -------------------------------------------------------------
+// to run: npx ts-node scripts/test-trace-steps.ts
+// -------------------------------------------------------------
+
 async function main() {
   // 🔧 REGISTER TOOLS FIRST
   registerToolPack({
@@ -16,7 +20,7 @@ async function main() {
     {
       type: "tool",
       tool: "core.add",
-      arguments: { a: "five", b: "2" },
+      arguments: { a: "five", b: "2" }, // forced error by passing a string instead of a number
     },
     trace,
   );
