@@ -1,6 +1,13 @@
 export type TraceEvent =
   | { type: "planner"; decision: string }
-  | { type: "tool_invocation"; tool: string; args: any }
+  | { type: "tool_invocation"; tool: string; rawArgs: unknown }
+  | {
+      type: "tool_normalization";
+      tool: string;
+      rawArgs: unknown;
+      normalizedArgs: unknown;
+      normalizationApplied: boolean;
+    }
   | {
       type: "enforcement";
       action: "refuse" | "allow";
@@ -14,12 +21,20 @@ export type TraceEvent =
   | {
       type: "tool_result";
       tool: string;
-      result?: any;
+      status: "success";
+      result: unknown;
+      duration: number;
+    }
+  | {
+      type: "tool_result";
+      tool: string;
+      status: "error";
       duration?: number;
-      error?: {
+      error: {
         type: string;
         message: unknown;
         details?: any;
+        normalizedArgs?: unknown;
       };
     }
   | { type: "kernel_output"; outputType: "chat" | "refusal" | "tool" };

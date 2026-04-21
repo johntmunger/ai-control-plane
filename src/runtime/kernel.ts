@@ -13,7 +13,6 @@ import { TraceContext } from "./trace";
  * Central place to allow / deny tool execution
  */
 function enforceToolAccess(toolName: string) {
-  // 🔧 Simple policy for now (expand later)
   const deniedTools: string[] = [];
 
   if (deniedTools.includes(toolName)) {
@@ -30,17 +29,20 @@ function enforceToolAccess(toolName: string) {
 
 /**
  * Handles execution of a tool request inside the kernel boundary.
+ *
  * Guarantees:
- * - tool_invocation is always emitted
- * - tool_result is always emitted (success OR error)
+ * - tool_invocation ALWAYS emitted
+ * - tool_normalization ALWAYS emitted
+ * - tool_result ALWAYS emitted (success OR error)
+ * - kernel_output ONLY emitted by caller AFTER success
  */
 export async function handleKernelRequest(
   request: unknown,
   trace?: TraceContext,
 ) {
   let id: string | null = null;
-  let normalizationApplied = false;
   let toolName: string | null = null;
+  let normalizationApplied = false;
 
   try {
     const parsedRequest = KernelRequestSchema.parse(request);
@@ -49,17 +51,34 @@ export async function handleKernelRequest(
 
     const { tool, arguments: args } = parsedRequest;
     toolName = tool;
+    const rawArgsSnapshot = (() => {
+      try {
+        // ensure trace captures an immutable snapshot of planner intent
+        return structuredClone(args);
+      } catch {
+        return args;
+      }
+    })();
 
-    // ✅ ALWAYS emit invocation
+    /**
+     * 🧠 TRACE: TOOL INVOCATION (RAW INTENT)
+     * This represents what the planner asked for.
+     */
     trace?.push({
       type: "tool_invocation",
       tool,
-      args,
+      rawArgs: rawArgsSnapshot,
     });
 
-    // 🔒 ENFORCEMENT
+    /**
+     * 🔒 ENFORCEMENT
+     * Policy decision before any execution
+     */
     const enforcement = enforceToolAccess(tool);
 
+    /**
+     * 🧠 TRACE: ENFORCEMENT DECISION
+     */
     trace?.push({
       type: "enforcement",
       tool,
@@ -68,9 +87,13 @@ export async function handleKernelRequest(
     });
 
     if (enforcement.decision === "deny") {
+      /**
+       * 🧠 TRACE: TOOL RESULT (POLICY FAILURE)
+       */
       trace?.push({
         type: "tool_result",
         tool,
+        status: "error",
         error: {
           type: "policy",
           message: enforcement.reason,
@@ -92,37 +115,82 @@ export async function handleKernelRequest(
       throw new UnknownToolError(tool);
     }
 
-    // --- normalization ---
+    /**
+     * 🔧 NORMALIZATION
+     * Transform raw args into structured form
+     */
     let normalizedArgs = args;
 
     if (toolDef.normalize) {
       const result = toolDef.normalize(args);
-      const didChange = JSON.stringify(result) !== JSON.stringify(args);
-
       normalizedArgs = result;
-
-      if (didChange) {
-        try {
-          toolDef.schema.parse(result);
-          normalizationApplied = true;
-        } catch {
-          normalizationApplied = false;
-        }
-      }
+      normalizationApplied = true;
     }
 
-    // --- validation ---
-    const parsedArgs = toolDef.schema.parse(normalizedArgs);
+    /**
+     * 🧠 TRACE: NORMALIZATION (CRITICAL STEP)
+     * Always emitted BEFORE validation so failures are observable
+     */
+    const normalizedArgsSnapshot = (() => {
+      try {
+        // ensure trace captures an immutable snapshot of normalized args
+        return structuredClone(normalizedArgs);
+      } catch {
+        return normalizedArgs;
+      }
+    })();
 
-    console.debug("KERNEL NORMALIZATION:", {
-      id,
-      tool: toolDef.name,
-      raw_args: args,
-      normalized_args: normalizedArgs,
-      normalization_applied: normalizationApplied,
+    trace?.push({
+      type: "tool_normalization",
+      tool,
+      rawArgs: rawArgsSnapshot,
+      normalizedArgs: normalizedArgsSnapshot,
+      normalizationApplied,
     });
 
-    // --- execution ---
+    /**
+     * 🔒 VALIDATION (EXPLICIT, NON-THROWING)
+     * This is the execution gate
+     */
+    const parsed = toolDef.schema.safeParse(normalizedArgs);
+
+    if (!parsed.success) {
+      /**
+       * 🧠 TRACE: TOOL RESULT (VALIDATION FAILURE)
+       */
+      trace?.push({
+        type: "tool_result",
+        tool: toolDef.name,
+        status: "error",
+        error: {
+          type: "validation",
+          message: "Invalid arguments",
+          details: parsed.error.issues.map((issue) => ({
+            path: issue.path,
+            message: issue.message,
+            code: issue.code,
+          })),
+          normalizedArgs,
+        },
+      });
+
+      return {
+        id,
+        error: {
+          type: "validation",
+          message: "Invalid arguments",
+        },
+        meta: {
+          normalization_applied: normalizationApplied,
+        },
+      };
+    }
+
+    const parsedArgs = parsed.data;
+
+    /**
+     * 🚀 EXECUTION START
+     */
     logInvocation(id ?? "unknown", toolDef.name, parsedArgs);
 
     const startTime = Date.now();
@@ -131,16 +199,13 @@ export async function handleKernelRequest(
 
     const duration = Date.now() - startTime;
 
+    /**
+     * 🧠 TRACE: TOOL RESULT (SUCCESS)
+     */
     trace?.push({
       type: "tool_result",
       tool: toolDef.name,
-      result,
-      duration,
-    });
-
-    console.log("KERNEL RESULT:", {
-      id,
-      tool: toolDef.name,
+      status: "success",
       result,
       duration,
     });
@@ -157,9 +222,13 @@ export async function handleKernelRequest(
   } catch (err) {
     const normalized = normalizeError(err);
 
+    /**
+     * 🧠 TRACE: TOOL RESULT (UNEXPECTED ERROR)
+     */
     trace?.push({
       type: "tool_result",
       tool: toolName ?? "unknown",
+      status: "error",
       error: normalized,
     });
 
@@ -174,11 +243,14 @@ export async function handleKernelRequest(
 }
 
 /**
- * Main kernel entry point.
+ * 🔥 Main kernel entry point
+ *
+ * Guarantees:
+ * - kernel_output is ONLY emitted here
+ * - only after successful execution path
  */
 export async function executeKernel(input: KernelInput, trace?: TraceContext) {
   console.log("🔥 EXECUTE KERNEL HIT:", JSON.stringify(input));
-  console.log("KERNEL INPUT:", input.type);
 
   switch (input.type) {
     case "tool": {
@@ -193,7 +265,10 @@ export async function executeKernel(input: KernelInput, trace?: TraceContext) {
         trace,
       );
 
-      // 🔒 INVARIANT GUARD
+      /**
+       * 🔒 INVARIANT GUARD
+       * Ensure execution actually happened
+       */
       const afterEvents = trace ? trace.events.slice(beforeLength) : [];
 
       const hasInvocation = afterEvents.some(
@@ -208,15 +283,24 @@ export async function executeKernel(input: KernelInput, trace?: TraceContext) {
         );
       }
 
-      trace?.push({
-        type: "kernel_output",
-        outputType: "tool",
-      });
+      /**
+       * 🧠 TRACE: KERNEL OUTPUT (FINAL AUTHORITY)
+       * This is the ONLY place user-visible output is authorized
+       */
+      if (!result.error) {
+        trace?.push({
+          type: "kernel_output",
+          outputType: "tool",
+        });
+      }
 
       return result;
     }
 
     case "chat": {
+      /**
+       * 🧠 TRACE: CHAT OUTPUT
+       */
       trace?.push({
         type: "kernel_output",
         outputType: "chat",
@@ -230,6 +314,9 @@ export async function executeKernel(input: KernelInput, trace?: TraceContext) {
     }
 
     case "refusal": {
+      /**
+       * 🧠 TRACE: REFUSAL OUTPUT
+       */
       trace?.push({
         type: "kernel_output",
         outputType: "refusal",
