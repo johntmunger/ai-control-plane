@@ -10,8 +10,6 @@ All notable changes to the AI Control Plane Runtime will be documented in this f
 
 This release establishes the control-plane as a **deterministic, observable execution system**, with the kernel as the single authority for transformation, validation, and execution.
 
----
-
 ### 🔧 Core Changes
 
 #### 🔒 Kernel Authority Restored
@@ -94,6 +92,11 @@ This forms the foundation for:
 - devtools-style inspection
 - multi-step agent orchestration
 - deterministic replay and debugging
+
+🚀 Next
+Wire FrameReducer directly into kernel
+Enable real-time frame streaming (no replay loop)
+Introduce devtools-style execution timeline
 
 ---
 
