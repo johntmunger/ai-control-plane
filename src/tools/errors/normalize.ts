@@ -6,7 +6,8 @@ export function normalizeError(err: unknown) {
     return {
       type: "deterministic",
       subtype: "validation",
-      message: err.issues.map((i) => ({
+      message: "Invalid arguments", // ✅ string
+      details: err.issues.map((i) => ({
         path: i.path.join("."),
         message: i.message,
       })),

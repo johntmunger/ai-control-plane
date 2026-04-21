@@ -32,8 +32,8 @@ export type TraceEvent =
       duration?: number;
       error: {
         type: string;
-        message: unknown;
-        details?: any;
+        message: string;
+        details?: unknown;
         normalizedArgs?: unknown;
       };
     }
