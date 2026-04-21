@@ -4,7 +4,98 @@
 
 All notable changes to the AI Control Plane Runtime will be documented in this file.
 
-### 🚀 v0.7.0 — Deterministic Execution Guarantees + Trace as System Invariant
+## 🚀 v0.7.0 — Deterministic Execution + Observable State Foundation
+
+### ✨ Summary
+
+This release establishes the control-plane as a **deterministic, observable execution system**, with the kernel as the single authority for transformation, validation, and execution.
+
+---
+
+### 🔧 Core Changes
+
+#### 🔒 Kernel Authority Restored
+
+- Moved all normalization inside the kernel
+- Eliminated pre-kernel mutation paths
+- Ensures all execution behavior passes through a single controlled boundary
+
+#### 🔄 Explicit Normalization Stage
+
+- Introduced `tool_normalization` trace event
+- Captures `rawArgs → normalizedArgs` transformations
+- Supports both transforming and no-op normalization (`normalizationApplied`)
+
+#### 🧱 Structured Error Contract
+
+- Centralized error handling via `normalizeError`
+- Enforced consistent error shape:
+  - `type`
+  - `message`
+  - optional `details`
+
+- Removed raw/ambiguous error propagation from runtime
+
+#### 🧭 Trace as System Invariant
+
+- Trace now reflects **actual execution only**
+- Eliminated synthetic or inferred responses
+- Full lifecycle visibility:
+  - invocation → enforcement → normalization → result → output
+
+#### 🧩 Execution Frames Introduced
+
+- Added `ExecutionFrame` as state representation of execution steps
+- Frames model system state instead of reconstructing from logs
+
+#### ⚙️ FrameReducer (Streaming-Ready)
+
+- Implemented event-driven reducer:
+  - `TraceEvent → Frame state`
+
+- Enables incremental state updates (foundation for real-time UI)
+
+---
+
+### ✅ Guarantees Established
+
+- No execution without validation
+- No output without successful execution
+- All transformations are observable
+- All errors are structured and deterministic
+- State is derived from events, not inferred
+
+---
+
+### 🧠 Architectural Impact
+
+- Elevates trace from debugging tool → **system invariant**
+- Establishes kernel as:
+  - execution authority
+  - transformation boundary
+  - validation gate
+
+- Separates:
+  - raw input (`rawArgs`)
+  - transformed input (`normalizedArgs`)
+  - validated execution
+
+---
+
+### 🔥 Why This Matters
+
+The system now:
+
+> **Does not just execute — it explains its behavior with complete fidelity**
+
+This forms the foundation for:
+
+- streaming execution
+- devtools-style inspection
+- multi-step agent orchestration
+- deterministic replay and debugging
+
+---
 
 #### feat(control-plane): enforce validation-gated execution, explicit normalization stage, and namespaced tool registry
 
