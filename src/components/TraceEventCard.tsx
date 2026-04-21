@@ -26,14 +26,30 @@ function getLabel(event: any) {
     case "planner":
       return "Planner";
 
-    case "enforcement":
-      return `Enforcement (${event.action})`;
+    case "enforcement": {
+      if (typeof event.action === "string") {
+        return `Enforcement (${event.action})`;
+      }
+      if (typeof event.decision === "string" && typeof event.tool === "string") {
+        return `Enforcement (${event.tool}: ${event.decision})`;
+      }
+      return "Enforcement";
+    }
 
     case "tool_invocation":
       return `Tool: ${event.tool}`;
 
+    case "tool_normalization":
+      return `Normalize: ${event.tool}`;
+
     case "tool_result":
-      return `Result (${event.duration}ms)`;
+      if (event.status === "success" && typeof event.duration === "number") {
+        return `Result (${event.duration}ms)`;
+      }
+      if (event.status === "error") {
+        return "Result (error)";
+      }
+      return "Result";
 
     case "kernel_output":
       return `Output: ${event.outputType}`;
