@@ -6,6 +6,11 @@ import { withTimeout } from "../utils/timeout";
 import { logInvocation } from "../utils/logging";
 import type { KernelInput } from "../types/control-plane";
 import { TraceContext } from "./trace";
+import type { TraceEvent } from "./trace";
+
+type KernelOptions = {
+  onEvent?: (event: TraceEvent) => void;
+};
 
 /**
  * 🔒 Enforcement Layer
@@ -39,10 +44,16 @@ function enforceToolAccess(toolName: string) {
 export async function handleKernelRequest(
   request: unknown,
   trace?: TraceContext,
+  options?: KernelOptions,
 ) {
   let id: string | null = null;
   let toolName: string | null = null;
   let normalizationApplied = false;
+
+  function emit(event: TraceEvent) {
+    trace?.push(event);
+    options?.onEvent?.(event);
+  }
 
   try {
     const parsedRequest = KernelRequestSchema.parse(request);
@@ -64,7 +75,7 @@ export async function handleKernelRequest(
      * 🧠 TRACE: TOOL INVOCATION (RAW INTENT)
      * This represents what the planner asked for.
      */
-    trace?.push({
+    emit({
       type: "tool_invocation",
       tool,
       rawArgs: rawArgsSnapshot,
@@ -79,7 +90,7 @@ export async function handleKernelRequest(
     /**
      * 🧠 TRACE: ENFORCEMENT DECISION
      */
-    trace?.push({
+    emit({
       type: "enforcement",
       tool,
       decision: enforcement.decision,
@@ -90,7 +101,7 @@ export async function handleKernelRequest(
       /**
        * 🧠 TRACE: TOOL RESULT (POLICY FAILURE)
        */
-      trace?.push({
+      emit({
         type: "tool_result",
         tool,
         status: "error",
@@ -140,7 +151,7 @@ export async function handleKernelRequest(
       }
     })();
 
-    trace?.push({
+    emit({
       type: "tool_normalization",
       tool,
       rawArgs: rawArgsSnapshot,
@@ -158,7 +169,7 @@ export async function handleKernelRequest(
       /**
        * 🧠 TRACE: TOOL RESULT (VALIDATION FAILURE)
        */
-      trace?.push({
+      emit({
         type: "tool_result",
         tool: toolDef.name,
         status: "error",
@@ -202,7 +213,7 @@ export async function handleKernelRequest(
     /**
      * 🧠 TRACE: TOOL RESULT (SUCCESS)
      */
-    trace?.push({
+    emit({
       type: "tool_result",
       tool: toolDef.name,
       status: "success",
@@ -225,7 +236,7 @@ export async function handleKernelRequest(
     /**
      * 🧠 TRACE: TOOL RESULT (UNEXPECTED ERROR)
      */
-    trace?.push({
+    emit({
       type: "tool_result",
       tool: toolName ?? "unknown",
       status: "error",
@@ -249,7 +260,16 @@ export async function handleKernelRequest(
  * - kernel_output is ONLY emitted here
  * - only after successful execution path
  */
-export async function executeKernel(input: KernelInput, trace?: TraceContext) {
+export async function executeKernel(
+  input: KernelInput,
+  trace?: TraceContext,
+  options?: KernelOptions,
+) {
+  const emit = (event: TraceEvent) => {
+    trace?.push(event);
+    options?.onEvent?.(event);
+  };
+
   console.log("🔥 EXECUTE KERNEL HIT:", JSON.stringify(input));
 
   switch (input.type) {
@@ -263,6 +283,7 @@ export async function executeKernel(input: KernelInput, trace?: TraceContext) {
           arguments: input.arguments,
         },
         trace,
+        options,
       );
 
       /**
@@ -288,7 +309,7 @@ export async function executeKernel(input: KernelInput, trace?: TraceContext) {
        * This is the ONLY place user-visible output is authorized
        */
       if (!result.error) {
-        trace?.push({
+        emit({
           type: "kernel_output",
           outputType: "tool",
         });
@@ -301,7 +322,7 @@ export async function executeKernel(input: KernelInput, trace?: TraceContext) {
       /**
        * 🧠 TRACE: CHAT OUTPUT
        */
-      trace?.push({
+      emit({
         type: "kernel_output",
         outputType: "chat",
       });
@@ -317,7 +338,7 @@ export async function executeKernel(input: KernelInput, trace?: TraceContext) {
       /**
        * 🧠 TRACE: REFUSAL OUTPUT
        */
-      trace?.push({
+      emit({
         type: "kernel_output",
         outputType: "refusal",
       });
