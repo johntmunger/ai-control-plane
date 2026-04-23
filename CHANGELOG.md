@@ -4,6 +4,42 @@
 
 All notable changes to the AI Control Plane Runtime will be documented in this file.
 
+## v0.8 — Execution Frames + Runtime Devtools
+
+### Added
+
+- Introduced **ExecutionFrames** as a first-class runtime abstraction
+- Added **FrameReducer** for deterministic state reconstruction from trace events
+- Built **TracePanel v2** (devtools-style timeline UI)
+- Added **TestRuntime** for browser-based execution and inspection
+- Introduced Vite-powered UI runtime for control-plane visualization
+
+### Changed
+
+- Refactored UI from **event-based → frame-based rendering**
+- Kernel now owns **argument normalization and validation boundaries**
+- Error contract standardized (validation, deterministic, transient)
+
+### Improved
+
+- Real-time streaming execution via `onEvent` → reducer → React state
+- Clear execution lifecycle visualization:
+  - pending → resolved/failed → committed
+- Execution summary header for quick inspection of latest result
+
+### Architecture
+
+- Established pattern:
+  Kernel → emit(event) → FrameReducer → ExecutionFrames → UI
+- Removed reliance on trace replay for UI state
+- Separated runtime lifecycle from React lifecycle (Strict Mode safe)
+
+### Notes
+
+- TracePanel now represents **execution state**, not raw events
+- Commit frames (`kernel_output`) represent system boundary transitions
+- UI acts as a **runtime debugger**, not just a log viewer
+
 ## 🚀 v0.7.0 — Deterministic Execution + Observable State Foundation
 
 ### ✨ Summary
