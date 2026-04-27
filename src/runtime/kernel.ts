@@ -15,9 +15,9 @@ type KernelOptions = {
 /**
  * 🔒 Enforcement Layer
  *
- * Central place to allow / deny tool execution
+ * Central place to allow / deny tool execution (tool-level + argument-aware policy).
  */
-function enforceToolAccess(toolName: string) {
+function enforceToolAccess(toolName: string, args: unknown) {
   const deniedTools: string[] = [];
 
   if (deniedTools.includes(toolName)) {
@@ -25,6 +25,22 @@ function enforceToolAccess(toolName: string) {
       decision: "deny" as const,
       reason: "tool_not_allowed",
     };
+  }
+
+  if (toolName === "core.add") {
+    const raw =
+      args && typeof args === "object" && !Array.isArray(args)
+        ? (args as Record<string, unknown>)
+        : {};
+    const a = Number(raw.a);
+    const b = Number(raw.b);
+
+    if (a < 0 || b < 0) {
+      return {
+        decision: "deny" as const,
+        reason: "negative inputs are restricted by policy",
+      };
+    }
   }
 
   return {
@@ -85,7 +101,7 @@ export async function handleKernelRequest(
      * 🔒 ENFORCEMENT
      * Policy decision before any execution
      */
-    const enforcement = enforceToolAccess(tool);
+    const enforcement = enforceToolAccess(tool, args);
 
     /**
      * 🧠 TRACE: ENFORCEMENT DECISION

@@ -41,23 +41,21 @@ export function TestRuntime() {
 
         const trace = createTrace();
 
-        await executeKernel(
-          {
-            type: "tool",
-            tool: "core.add",
-            arguments: { a: "five", b: "2" },
-          },
-          trace,
-        );
+        const runs = [
+          { label: "Validation Error", args: { a: "five", b: "2" } },
+          { label: "Success", args: { a: "5", b: "2" } },
+        ] as const;
 
-        await executeKernel(
-          {
-            type: "tool",
-            tool: "core.add",
-            arguments: { a: "5", b: "2" },
-          },
-          trace,
-        );
+        for (const run of runs) {
+          await executeKernel(
+            {
+              type: "tool",
+              tool: "core.add",
+              arguments: run.args,
+            },
+            trace,
+          );
+        }
 
         if (cancelled) return;
 
@@ -81,9 +79,12 @@ export function TestRuntime() {
   return (
     <div
       style={{
+        height: "100vh",
         minHeight: "100vh",
         background: "#111",
         boxSizing: "border-box",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
       {error != null && error !== "" && (
@@ -91,7 +92,9 @@ export function TestRuntime() {
           {error}
         </div>
       )}
-      <TracePanel frames={frames} />
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <TracePanel frames={frames} />
+      </div>
     </div>
   );
 }
