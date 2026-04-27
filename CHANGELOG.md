@@ -19,6 +19,9 @@ All notable changes to the AI Control Plane Runtime will be documented in this f
 - Refactored UI from **event-based → frame-based rendering**
 - Kernel now owns **argument normalization and validation boundaries**
 - Error contract standardized (validation, deterministic, transient)
+- Updated UI mental model from **Step-based → Run-based labeling**
+  - Timeline now reflects independent executions instead of implying a single sequential process
+  - Renamed "Step" → "Run" across TracePanel, TraceEventCard, and StepInspector
 
 ### Improved
 
@@ -26,6 +29,8 @@ All notable changes to the AI Control Plane Runtime will be documented in this f
 - Clear execution lifecycle visualization:
   - pending → resolved/failed → committed
 - Execution summary header for quick inspection of latest result
+- Reduced cognitive overhead in timeline by aligning UI terminology with actual execution model (independent runs vs sequential steps)
+- Clarified distinction between separate executions and intra-execution lifecycle stages
 
 ### Architecture
 
@@ -39,6 +44,10 @@ All notable changes to the AI Control Plane Runtime will be documented in this f
 - TracePanel now represents **execution state**, not raw events
 - Commit frames (`kernel_output`) represent system boundary transitions
 - UI acts as a **runtime debugger**, not just a log viewer
+- Current UI presents multiple runs within a single trace (linearized)
+- Run grouping is not yet implemented (frames remain flat)
+- Commit frames still represent system boundary transitions following successful execution
+- Future direction: group frames by run for clearer devtools-style inspection
 
 ## 🚀 v0.7.0 — Deterministic Execution + Observable State Foundation
 
