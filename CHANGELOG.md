@@ -8,46 +8,29 @@ All notable changes to the AI Control Plane Runtime will be documented in this f
 
 ### Added
 
-- Introduced **ExecutionFrames** as a first-class runtime abstraction
-- Added **FrameReducer** for deterministic state reconstruction from trace events
-- Built **TracePanel v2** (devtools-style timeline UI)
-- Added **TestRuntime** for browser-based execution and inspection
+- Introduced ExecutionFrames as a first-class runtime abstraction
+- Added FrameReducer for deterministic state reconstruction from trace events
+- Built TracePanel v2 (devtools-style timeline UI)
+- Added TestRuntime for browser-based execution and inspection
 - Introduced Vite-powered UI runtime for control-plane visualization
 
-### Changed
-
-- Updated UI mental model from **Step-based → Run-based labeling**
-  - Timeline now reflects independent executions instead of implying a single sequential process
-  - Renamed "Step" → "Run" across TracePanel, TraceEventCard, and StepInspector
-- Refactored UI from **event-based → frame-based rendering**
-- Kernel now owns **argument normalization and validation boundaries**
-- Error contract standardized (validation, deterministic, transient)
+- Added runtime telemetry visibility inside TracePanel
+- Added event-level execution inspection:
+  - tool invocation
+  - tool normalization
+  - enforcement
+  - tool result
+  - kernel output
 
 ### Improved
 
-- Reduced cognitive overhead in timeline by aligning UI terminology with actual execution model (independent runs vs sequential steps)
-- Clarified distinction between separate executions and intra-execution lifecycle stages
-- Real-time streaming execution via `onEvent` → reducer → React state
-- Clear execution lifecycle visualization:
-  - pending → resolved/failed → committed
-- Execution summary header for quick inspection of latest result
+- ExecutionFrames now expose both:
+  - derived execution state
+  - underlying runtime evidence
 
-### Architecture
+- TracePanel now functions as a runtime inspector rather than a status viewer
+- Enables lifecycle phase analysis from observable telemetry
 
-- Established pattern:
-  Kernel → emit(event) → FrameReducer → ExecutionFrames → UI
-- Removed reliance on trace replay for UI state
-- Separated runtime lifecycle from React lifecycle (Strict Mode safe)
-
-### Notes
-
-- Current UI presents multiple runs within a single trace (linearized)
-- Run grouping is not yet implemented (frames remain flat)
-- Commit frames still represent system boundary transitions following successful execution
-- Future direction: group frames by run for clearer devtools-style inspection
-- TracePanel now represents **execution state**, not raw events
-- Commit frames (`kernel_output`) represent system boundary transitions
-- UI acts as a **runtime debugger**, not just a log viewer
 
 ## 🚀 v0.7.0 — Deterministic Execution + Observable State Foundation
 
