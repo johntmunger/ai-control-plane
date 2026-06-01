@@ -11,23 +11,42 @@ export class FrameReducer {
   applyEvent(event: TraceEvent) {
     const current = this.frames[this.frames.length - 1];
 
+    const attachEvent = (frame?: ExecutionFrame) => {
+      if (!frame) return;
+
+      if (!frame.traceEvents) {
+        frame.traceEvents = [];
+      }
+
+      frame.traceEvents.push(event);
+    };
+
     switch (event.type) {
       case "tool_invocation": {
         this.frames.push({
           id: crypto.randomUUID(),
           step: this.frames.length + 1,
           status: "pending",
-          plan: { decision: event.tool },
+
+          traceEvents: [event],
+
+          plan: {
+            decision: event.tool,
+          },
+
           tool: {
             name: event.tool,
             rawArgs: event.rawArgs,
           },
         });
+
         break;
       }
 
       case "enforcement": {
         if (!current) break;
+
+        attachEvent(current);
 
         if ("decision" in event) {
           current.enforcement = {
@@ -46,12 +65,17 @@ export class FrameReducer {
       case "tool_normalization": {
         if (!current?.tool) break;
 
+        attachEvent(current);
+
         current.tool.normalizedArgs = event.normalizedArgs;
+
         break;
       }
 
       case "tool_result": {
         if (!current?.tool) break;
+
+        attachEvent(current);
 
         if (event.status === "success") {
           current.status = "resolved";
@@ -74,10 +98,20 @@ export class FrameReducer {
           id: crypto.randomUUID(),
           step: this.frames.length + 1,
           status: "committed",
+
+          traceEvents: [event],
+
           output: {
             type: event.outputType,
           },
         });
+
+        break;
+      }
+
+      case "planner": {
+        // planner exists in telemetry
+        // we'll decide later how to visualize it
         break;
       }
     }

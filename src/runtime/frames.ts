@@ -12,6 +12,8 @@ export type ExecutionFrame = {
   step: number;
   status: FrameStatus;
 
+  traceEvents?: TraceEvent[];
+
   plan?: {
     decision?: string;
   };
@@ -48,13 +50,29 @@ export function buildFrames(events: TraceEvent[]): ExecutionFrame[] {
   for (const event of events) {
     const current = frames[frames.length - 1];
 
+    const attachEvent = (frame?: ExecutionFrame) => {
+      if (!frame) return;
+    
+      if (!frame.traceEvents) {
+        frame.traceEvents = [];
+      }
+    
+      frame.traceEvents.push(event);
+    };
+
     switch (event.type) {
       case "tool_invocation": {
         frames.push({
           id: crypto.randomUUID(),
           step: frames.length + 1,
           status: "pending",
-          plan: { decision: event.tool },
+        
+          traceEvents: [event],
+        
+          plan: {
+            decision: event.tool,
+          },
+        
           tool: {
             name: event.tool,
             rawArgs: event.rawArgs,
@@ -65,6 +83,8 @@ export function buildFrames(events: TraceEvent[]): ExecutionFrame[] {
 
       case "enforcement": {
         if (!current) break;
+
+        attachEvent(current);
 
         if ("decision" in event) {
           current.enforcement = {
@@ -82,13 +102,17 @@ export function buildFrames(events: TraceEvent[]): ExecutionFrame[] {
 
       case "tool_normalization": {
         if (!current?.tool) break;
-
+      
+        attachEvent(current);
+      
         current.tool.normalizedArgs = event.normalizedArgs;
         break;
       }
 
       case "tool_result": {
         if (!current?.tool) break;
+      
+        attachEvent(current);
 
         if (event.status === "success") {
           current.status = "resolved";
@@ -111,10 +135,14 @@ export function buildFrames(events: TraceEvent[]): ExecutionFrame[] {
           id: crypto.randomUUID(),
           step: frames.length + 1,
           status: "committed",
+      
+          traceEvents: [event],
+      
           output: {
             type: event.outputType,
           },
         });
+      
         break;
       }
     }

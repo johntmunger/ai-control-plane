@@ -367,6 +367,44 @@ export function TraceEventCard({
             </>
           )}
 
+{frame.traceEvents?.length ? (
+  <div style={{ marginBottom: 10 }}>
+    <div
+      style={{
+        fontSize: 10,
+        opacity: 0.6,
+        marginBottom: 4,
+      }}
+    >
+      Trace Events
+    </div>
+
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 4,
+      }}
+    >
+      {frame.traceEvents.map((event, idx) => (
+        <span
+  key={`${event.type}-${idx}`}
+  style={{
+    padding: "2px 6px",
+    borderRadius: 4,
+    background: "#222",
+    border: "1px solid #333",
+    fontSize: 11,
+    fontFamily: "ui-monospace, monospace",
+  }}
+>
+  {event.type.replace(/_/g, " ")}
+</span>
+      ))}
+    </div>
+  </div>
+) : null}
+
           {frame.tool?.result !== undefined && (
             <Block label="result" value={extractResult(frame.tool.result)} />
           )}
