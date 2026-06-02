@@ -287,6 +287,22 @@ This allows:
 
 ---
 
+## Runtime Observability
+
+Telemetry events emitted by the runtime are transformed into
+ExecutionFrames and surfaced through TracePanel.
+
+ExecutionFrames contain:
+
+Derived State
++
+Runtime Evidence
+
+Lifecycle interpretation is derived from telemetry rather than
+stored as authoritative state.
+
+---
+
 ## 📜 Runtime evolution (intent, enforcement, output authority)
 
 The system moved from a **model-driven** ReAct loop (where a string “final answer” could bypass validation) to a **governed control-plane runtime**:
